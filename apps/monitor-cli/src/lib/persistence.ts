@@ -41,4 +41,8 @@ export class Persistence {
       .all()
       .map((row: { json: string }) => JSON.parse(row.json) as TaskRecord);
   }
+
+  close(): void {
+    if (this.#db.open) this.#db.close();
+  }
 }
