@@ -1,4 +1,5 @@
 import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import "./styles.css";
 import { fetchTasks } from "./api";
 import { parseTaskUrl } from "./deep-link";
@@ -35,6 +36,11 @@ async function handleUrls(urls: string[]) {
 
   selectedTaskId = first.taskId;
   await refresh();
+  await Promise.allSettled([
+    getCurrentWindow().show(),
+    getCurrentWindow().unminimize(),
+    getCurrentWindow().setFocus()
+  ]);
 }
 
 root?.addEventListener("click", (event) => {
