@@ -59,3 +59,11 @@ export function renderTasks(root: HTMLElement, viewModel: TaskViewModel) {
     </section>
   `;
 }
+
+export function renderError(root: HTMLElement, message: string) {
+  root.innerHTML = `
+    <section class="task-detail">
+      <p class="muted">Unable to reach daemon: ${escapeHtml(message)}</p>
+    </section>
+  `;
+}

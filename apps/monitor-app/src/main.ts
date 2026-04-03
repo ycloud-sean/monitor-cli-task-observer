@@ -1,6 +1,6 @@
 import "./styles.css";
 import { fetchTasks } from "./api";
-import { escapeHtml, renderTasks } from "./render";
+import { renderError, renderTasks } from "./render";
 import { buildTaskViewModel } from "./store";
 
 const root = document.querySelector<HTMLDivElement>("#app");
@@ -19,11 +19,7 @@ async function refresh() {
     renderTasks(root, viewModel);
   } catch (error) {
     document.title = "Monitor (!)";
-    root.innerHTML = `
-      <section class="task-detail">
-        <p class="muted">Unable to reach daemon: ${escapeHtml(String(error))}</p>
-      </section>
-    `;
+    renderError(root, String(error));
   }
 }
 
