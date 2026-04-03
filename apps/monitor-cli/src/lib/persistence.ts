@@ -3,6 +3,7 @@ import type { TaskEvent, TaskRecord } from "@monitor/contracts";
 
 export class Persistence {
   #db: Database.Database;
+  #applyEventTx: (event: TaskEvent, task: TaskRecord | undefined) => void;
 
   constructor(filePath: string) {
     this.#db = new Database(filePath);
@@ -19,6 +20,14 @@ export class Persistence {
         json text not null
       );
     `);
+    this.#applyEventTx = this.#db.transaction((event: TaskEvent, task: TaskRecord | undefined) => {
+      this.appendEvent(event);
+      if (task) this.saveTask(task);
+    });
+  }
+
+  applyEvent(event: TaskEvent, task?: TaskRecord): void {
+    this.#applyEventTx(event, task);
   }
 
   saveTask(task: TaskRecord): void {

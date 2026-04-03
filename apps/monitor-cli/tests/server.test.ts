@@ -3,11 +3,15 @@ import { createServer } from "node:http";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import Database from "better-sqlite3";
 import type { TaskEvent, TaskRecord } from "@monitor/contracts";
 import { createDaemonServer } from "../src/lib/server.js";
 import { DaemonClient } from "../src/lib/http-client.js";
+import { Persistence } from "../src/lib/persistence.js";
 
-function makeTaskStartedEvent(taskId = "task-1"): TaskEvent {
+type TaskStartedEvent = Extract<TaskEvent, { type: "task.started" }>;
+
+function makeTaskStartedEvent(taskId = "task-1"): TaskStartedEvent {
   return {
     type: "task.started",
     taskId,
@@ -109,6 +113,35 @@ describe("daemon server", () => {
     }
   });
 
+  it("rejects malformed task.started payloads", async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), "monitor-daemon-"));
+    dirs.push(dataDir);
+    const server = await createDaemonServer({ port: 0, dataDir });
+
+    try {
+      const baseUrl = `http://127.0.0.1:${server.port}`;
+      const mismatchedTaskId = makeTaskStartedEvent("task-1");
+      mismatchedTaskId.payload.taskId = "task-2";
+      const mismatchResponse = await fetch(`${baseUrl}/events`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(mismatchedTaskId)
+      });
+      expect(mismatchResponse.status).toBe(400);
+
+      const invalidRecord = makeTaskStartedEvent("task-3");
+      (invalidRecord.payload as unknown as { runnerType: unknown }).runnerType = "bad";
+      const invalidRecordResponse = await fetch(`${baseUrl}/events`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(invalidRecord)
+      });
+      expect(invalidRecordResponse.status).toBe(400);
+    } finally {
+      await server.close();
+    }
+  });
+
   it("hydrates tasks from sqlite on restart", async () => {
     const dataDir = mkdtempSync(join(tmpdir(), "monitor-daemon-"));
     dirs.push(dataDir);
@@ -170,6 +203,61 @@ describe("daemon server", () => {
       await new Promise<void>((resolve, reject) =>
         failingServer.close((error) => (error ? reject(error) : resolve()))
       );
+    }
+  });
+
+  it("rolls back event persistence when saving task snapshot fails", async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), "monitor-daemon-"));
+    dirs.push(dataDir);
+
+    const saveTaskOriginal = Persistence.prototype.saveTask;
+    let failOnce = true;
+    Persistence.prototype.saveTask = function patchedSaveTask(task) {
+      if (failOnce && task.taskId === "task-atomic") {
+        failOnce = false;
+        throw new Error("injected saveTask failure");
+      }
+      return saveTaskOriginal.call(this, task);
+    };
+
+    try {
+      const server = await createDaemonServer({ port: 0, dataDir });
+      try {
+        const baseUrl = `http://127.0.0.1:${server.port}`;
+        const failedResponse = await fetch(`${baseUrl}/events`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(makeTaskStartedEvent("task-atomic"))
+        });
+        expect(failedResponse.status).toBe(500);
+
+        const tasksResponse = await fetch(`${baseUrl}/tasks`);
+        const tasks = (await tasksResponse.json()) as TaskRecord[];
+        expect(tasks).toEqual([]);
+      } finally {
+        await server.close();
+      }
+    } finally {
+      Persistence.prototype.saveTask = saveTaskOriginal;
+    }
+
+    const db = new Database(join(dataDir, "monitor.sqlite"), { readonly: true });
+    try {
+      const eventRows = db
+        .prepare<unknown[], { c: number }>(
+          "select count(*) as c from task_events where task_id = ?"
+        )
+        .get("task-atomic");
+      const taskRows = db
+        .prepare<unknown[], { c: number }>("select count(*) as c from tasks where task_id = ?")
+        .get("task-atomic");
+      if (!eventRows || !taskRows) {
+        throw new Error("failed to fetch sqlite row counts");
+      }
+      expect(eventRows.c).toBe(0);
+      expect(taskRows.c).toBe(0);
+    } finally {
+      db.close();
     }
   });
 

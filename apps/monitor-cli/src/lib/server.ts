@@ -5,9 +5,10 @@ import {
   type ServerResponse
 } from "node:http";
 import { join } from "node:path";
-import type { TaskEvent } from "@monitor/contracts";
+import type { TaskEvent, TaskRecord } from "@monitor/contracts";
 import { TaskRegistry } from "./registry.js";
 import { Persistence } from "./persistence.js";
+import { applyEvent as applyTaskEvent } from "./state-machine.js";
 
 class RequestHandlingError extends Error {
   constructor(
@@ -27,6 +28,42 @@ function sendJson(res: ServerResponse, statusCode: number, body: unknown): void 
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+function isNullableString(value: unknown): value is string | null {
+  return value === null || typeof value === "string";
+}
+
+function isTaskRecord(value: unknown): value is TaskRecord {
+  if (!isObject(value)) return false;
+  return (
+    typeof value.taskId === "string" &&
+    typeof value.name === "string" &&
+    (value.runnerType === "codex" || value.runnerType === "claude") &&
+    isStringArray(value.rawCommand) &&
+    typeof value.cwd === "string" &&
+    typeof value.pid === "number" &&
+    Number.isFinite(value.pid) &&
+    Number.isInteger(value.pid) &&
+    (value.hostApp === "terminal" ||
+      value.hostApp === "iterm2" ||
+      value.hostApp === "cursor" ||
+      value.hostApp === "unknown") &&
+    isNullableString(value.hostWindowRef) &&
+    isNullableString(value.hostSessionRef) &&
+    typeof value.startedAt === "string" &&
+    typeof value.lastEventAt === "string" &&
+    (value.status === "running" ||
+      value.status === "waiting_input" ||
+      value.status === "waiting_approval" ||
+      value.status === "finished" ||
+      value.status === "error") &&
+    typeof value.lastOutputExcerpt === "string"
+  );
 }
 
 function parseTaskEvent(body: string): TaskEvent {
@@ -49,11 +86,7 @@ function parseTaskEvent(body: string): TaskEvent {
   }
 
   if (parsed.type === "task.started") {
-    if (
-      !isObject(parsed.payload) ||
-      typeof parsed.payload.taskId !== "string" ||
-      typeof parsed.payload.lastEventAt !== "string"
-    ) {
+    if (!isTaskRecord(parsed.payload) || parsed.taskId !== parsed.payload.taskId) {
       throw new RequestHandlingError(400, "bad_request", "Invalid task.started payload");
     }
   } else if (parsed.type === "task.output") {
@@ -73,6 +106,27 @@ function parseTaskEvent(body: string): TaskEvent {
   }
 
   return parsed as unknown as TaskEvent;
+}
+
+function resolveNextTask(
+  registry: TaskRegistry,
+  event: TaskEvent
+): TaskRecord | undefined {
+  if (event.type === "task.started") {
+    const current = registry.get(event.taskId);
+    if (
+      current &&
+      event.payload.lastEventAt.localeCompare(current.lastEventAt) <= 0
+    ) {
+      return current;
+    }
+    return event.payload;
+  }
+
+  const current = registry.get(event.taskId);
+  if (!current) return undefined;
+
+  return applyTaskEvent(current, event);
 }
 
 async function readBody(req: IncomingMessage): Promise<string> {
@@ -95,9 +149,9 @@ async function handleRequest(
 
     if (req.method === "POST" && req.url === "/events") {
       const event = parseTaskEvent(await readBody(req));
-      const next = registry.apply(event);
-      persistence.appendEvent(event);
-      if (next) persistence.saveTask(next);
+      const next = resolveNextTask(registry, event);
+      persistence.applyEvent(event, next);
+      if (next) registry.upsert(next);
       sendJson(res, 202, { ok: true });
       return;
     }
