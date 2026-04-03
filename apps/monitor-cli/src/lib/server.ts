@@ -38,6 +38,13 @@ function isNullableString(value: unknown): value is string | null {
   return value === null || typeof value === "string";
 }
 
+function isCanonicalIsoTimestamp(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)) return false;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return false;
+  return parsed.toISOString() === value;
+}
+
 function isTaskRecord(value: unknown): value is TaskRecord {
   if (!isObject(value)) return false;
   return (
@@ -84,9 +91,21 @@ function parseTaskEvent(body: string): TaskEvent {
   ) {
     throw new RequestHandlingError(400, "bad_request", "Event is missing required fields");
   }
+  if (!isCanonicalIsoTimestamp(parsed.at)) {
+    throw new RequestHandlingError(400, "bad_request", "Invalid event.at timestamp");
+  }
 
   if (parsed.type === "task.started") {
     if (!isTaskRecord(parsed.payload) || parsed.taskId !== parsed.payload.taskId) {
+      throw new RequestHandlingError(400, "bad_request", "Invalid task.started payload");
+    }
+    if (
+      !isCanonicalIsoTimestamp(parsed.payload.startedAt) ||
+      !isCanonicalIsoTimestamp(parsed.payload.lastEventAt)
+    ) {
+      throw new RequestHandlingError(400, "bad_request", "Invalid task.started payload");
+    }
+    if (parsed.at !== parsed.payload.lastEventAt) {
       throw new RequestHandlingError(400, "bad_request", "Invalid task.started payload");
     }
   } else if (parsed.type === "task.output") {

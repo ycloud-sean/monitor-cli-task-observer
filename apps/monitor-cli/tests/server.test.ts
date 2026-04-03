@@ -142,6 +142,87 @@ describe("daemon server", () => {
     }
   });
 
+  it("rejects task.started when payload timestamps are not canonical ISO strings", async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), "monitor-daemon-"));
+    dirs.push(dataDir);
+    const server = await createDaemonServer({ port: 0, dataDir });
+
+    try {
+      const baseUrl = `http://127.0.0.1:${server.port}`;
+
+      const invalidStartedAt = makeTaskStartedEvent("task-bad-started-at");
+      invalidStartedAt.payload.startedAt = "2026-4-3T08:00:00Z";
+      const invalidStartedAtResponse = await fetch(`${baseUrl}/events`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(invalidStartedAt)
+      });
+      expect(invalidStartedAtResponse.status).toBe(400);
+
+      const invalidLastEventAt = makeTaskStartedEvent("task-bad-last-event-at");
+      invalidLastEventAt.payload.lastEventAt = "not-a-timestamp";
+      const invalidLastEventAtResponse = await fetch(`${baseUrl}/events`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(invalidLastEventAt)
+      });
+      expect(invalidLastEventAtResponse.status).toBe(400);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("rejects task.started when event.at differs from payload.lastEventAt", async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), "monitor-daemon-"));
+    dirs.push(dataDir);
+    const server = await createDaemonServer({ port: 0, dataDir });
+
+    try {
+      const baseUrl = `http://127.0.0.1:${server.port}`;
+      const mismatchedEvent = makeTaskStartedEvent("task-time-mismatch");
+      mismatchedEvent.payload.lastEventAt = "2026-04-03T08:00:01.000Z";
+
+      const response = await fetch(`${baseUrl}/events`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(mismatchedEvent)
+      });
+      expect(response.status).toBe(400);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("rejects non-start events with invalid event.at timestamps", async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), "monitor-daemon-"));
+    dirs.push(dataDir);
+    const server = await createDaemonServer({ port: 0, dataDir });
+
+    try {
+      const baseUrl = `http://127.0.0.1:${server.port}`;
+      const startedResponse = await fetch(`${baseUrl}/events`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(makeTaskStartedEvent("task-invalid-at"))
+      });
+      expect(startedResponse.status).toBe(202);
+
+      const invalidAtEvent: TaskEvent = {
+        type: "task.finished",
+        taskId: "task-invalid-at",
+        at: "2026-04-03 08:01:00"
+      };
+      const response = await fetch(`${baseUrl}/events`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(invalidAtEvent)
+      });
+      expect(response.status).toBe(400);
+    } finally {
+      await server.close();
+    }
+  });
+
   it("hydrates tasks from sqlite on restart", async () => {
     const dataDir = mkdtempSync(join(tmpdir(), "monitor-daemon-"));
     dirs.push(dataDir);
