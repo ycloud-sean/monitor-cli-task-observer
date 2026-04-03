@@ -15,7 +15,8 @@
   },
   "dependencies": {
     "@monitor/contracts": "0.1.0",
-    "better-sqlite3": "^12.8.0"
+    "better-sqlite3": "^12.8.0",
+    "terminal-notifier": "^0.1.2"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
