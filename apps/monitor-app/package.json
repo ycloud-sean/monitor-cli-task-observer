@@ -13,6 +13,7 @@
   "dependencies": {
     "@monitor/contracts": "0.1.0",
     "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-deep-link": "^2",
     "@tauri-apps/plugin-opener": "^2"
   },
   "devDependencies": {

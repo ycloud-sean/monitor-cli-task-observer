@@ -1,5 +1,7 @@
+import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
 import "./styles.css";
 import { fetchTasks } from "./api";
+import { parseTaskUrl } from "./deep-link";
 import { renderError, renderTasks } from "./render";
 import { buildTaskViewModel } from "./store";
 
@@ -23,6 +25,18 @@ async function refresh() {
   }
 }
 
+async function handleUrls(urls: string[]) {
+  const first = urls
+    .map(parseTaskUrl)
+    .find((value): value is { taskId: string } => value !== null);
+  if (!first) {
+    return;
+  }
+
+  selectedTaskId = first.taskId;
+  await refresh();
+}
+
 root?.addEventListener("click", (event) => {
   const taskId = (event.target as HTMLElement)
     .closest<HTMLElement>(".task-row")
@@ -34,6 +48,16 @@ root?.addEventListener("click", (event) => {
 
   selectedTaskId = taskId;
   void refresh();
+});
+
+void getCurrent().then((urls) => {
+  if (urls && urls.length > 0) {
+    void handleUrls(urls);
+  }
+});
+
+void onOpenUrl((urls) => {
+  void handleUrls(urls);
 });
 
 void refresh();

@@ -7,6 +7,7 @@ import {
 import { join } from "node:path";
 import type { TaskEvent, TaskRecord } from "@monitor/contracts";
 import { TaskRegistry } from "./registry.js";
+import { notifyTask } from "./notification.js";
 import { Persistence } from "./persistence.js";
 import { applyEvent as applyTaskEvent } from "./state-machine.js";
 
@@ -171,6 +172,7 @@ async function handleRequest(
       const next = resolveNextTask(registry, event);
       persistence.applyEvent(event, next);
       if (next) registry.upsert(next);
+      if (next) await notifyTask(next).catch(() => undefined);
       sendJson(res, 202, { ok: true });
       return;
     }
