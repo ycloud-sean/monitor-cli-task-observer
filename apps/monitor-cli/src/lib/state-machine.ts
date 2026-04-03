@@ -10,7 +10,7 @@ export function applyEvent(
   task: TaskRecord,
   event: TaskTransitionEvent
 ): TaskRecord {
-  if (event.at < task.lastEventAt) return task;
+  if (event.at <= task.lastEventAt) return task;
 
   const isTerminalTask = task.status === "finished" || task.status === "error";
   const isNonTerminalEvent =

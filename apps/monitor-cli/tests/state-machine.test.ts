@@ -72,6 +72,23 @@ describe("applyEvent", () => {
     expect(next.status).toBe("waiting_input");
     expect(next.lastEventAt).toBe("2026-04-03T08:03:00.000Z");
   });
+
+  it("ignores equal-timestamp non-start events", () => {
+    const current = {
+      ...makeTask(),
+      status: "waiting_input" as const,
+      lastEventAt: "2026-04-03T08:03:00.000Z"
+    };
+    const next = applyEvent(current, {
+      type: "task.output",
+      taskId: "task-1",
+      at: "2026-04-03T08:03:00.000Z",
+      payload: { chunk: "same-time output" }
+    });
+
+    expect(next.status).toBe("waiting_input");
+    expect(next.lastEventAt).toBe("2026-04-03T08:03:00.000Z");
+  });
 });
 
 describe("TaskRegistry", () => {
