@@ -1,3 +1,4 @@
+import { execFile } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import {
   createServer,
@@ -5,11 +6,15 @@ import {
   type ServerResponse
 } from "node:http";
 import { join } from "node:path";
+import { promisify } from "node:util";
 import type { TaskEvent, TaskRecord } from "@monitor/contracts";
+import { buildFocusScript } from "./focus/router.js";
 import { TaskRegistry } from "./registry.js";
 import { notifyTask, shouldNotifyTaskUpdate } from "./notification.js";
 import { Persistence } from "./persistence.js";
 import { applyEvent as applyTaskEvent } from "./state-machine.js";
+
+const execFileAsync = promisify(execFile);
 
 class RequestHandlingError extends Error {
   constructor(
@@ -72,6 +77,18 @@ function isTaskRecord(value: unknown): value is TaskRecord {
       value.status === "error") &&
     typeof value.lastOutputExcerpt === "string"
   );
+}
+
+function parseFocusTaskId(url: string | undefined): string | null {
+  if (!url) return null;
+
+  try {
+    const pathname = new URL(url, "http://127.0.0.1").pathname;
+    const match = /^\/tasks\/([^/]+)\/focus$/.exec(pathname);
+    return match ? decodeURIComponent(match[1] ?? "") : null;
+  } catch {
+    return null;
+  }
 }
 
 function parseTaskEvent(body: string): TaskEvent {
@@ -177,6 +194,28 @@ async function handleRequest(
         await notifyTask(next).catch(() => undefined);
       }
       sendJson(res, 202, { ok: true });
+      return;
+    }
+
+    const focusTaskId = req.method === "POST" ? parseFocusTaskId(req.url) : null;
+    if (focusTaskId) {
+      const task = registry.get(focusTaskId);
+      if (!task) {
+        sendJson(res, 404, { error: "task_not_found", message: "Task not found" });
+        return;
+      }
+
+      try {
+        const script = buildFocusScript(task);
+        await execFileAsync("osascript", ["-e", script]);
+        sendJson(res, 200, { ok: true });
+      } catch (error) {
+        sendJson(res, 409, {
+          ok: false,
+          reason: "focus_failed",
+          message: String(error)
+        });
+      }
       return;
     }
 

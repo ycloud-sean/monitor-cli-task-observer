@@ -13,3 +13,21 @@ export async function fetchTasks(baseUrl = resolveDaemonBaseUrl()): Promise<Task
   }
   return (await response.json()) as TaskRecord[];
 }
+
+export async function focusTask(
+  taskId: string,
+  baseUrl = resolveDaemonBaseUrl()
+): Promise<boolean> {
+  const response = await fetch(`${baseUrl}/tasks/${encodeURIComponent(taskId)}/focus`, {
+    method: "POST"
+  });
+
+  if (!response.ok) {
+    return false;
+  }
+
+  const result = (await response.json().catch(() => ({ ok: false }))) as {
+    ok?: boolean;
+  };
+  return result.ok === true;
+}

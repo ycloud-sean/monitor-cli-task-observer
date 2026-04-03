@@ -1,7 +1,7 @@
 import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import "./styles.css";
-import { fetchTasks } from "./api";
+import { fetchTasks, focusTask } from "./api";
 import { parseTaskUrl } from "./deep-link";
 import { renderError, renderTasks } from "./render";
 import { buildTaskViewModel } from "./store";
@@ -44,7 +44,18 @@ async function handleUrls(urls: string[]) {
 }
 
 root?.addEventListener("click", (event) => {
-  const taskId = (event.target as HTMLElement)
+  const target = event.target as HTMLElement;
+  const focusTaskId = target.closest<HTMLElement>(".focus-task")?.dataset.taskId;
+  if (focusTaskId) {
+    selectedTaskId = focusTaskId;
+    void (async () => {
+      await focusTask(focusTaskId).catch(() => false);
+      await refresh();
+    })();
+    return;
+  }
+
+  const taskId = target
     .closest<HTMLElement>(".task-row")
     ?.dataset.taskId;
 
