@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import type { TaskEvent } from "@monitor/contracts";
 import {
-  buildStdoutEvents,
+  buildCloseEvents,
+  buildStreamEvents,
   createEventQueue,
   parseNameArg,
   resolveProcessExitCode
@@ -24,17 +25,53 @@ describe("resolveProcessExitCode", () => {
   });
 });
 
-describe("buildStdoutEvents", () => {
+describe("buildStreamEvents", () => {
   it("keeps output chunk and then emits wait-state event", () => {
-    const events = buildStdoutEvents("task-1", "Do you want to allow this command?");
-    expect(events).toHaveLength(2);
-    expect(events[0]).toMatchObject({
+    const result = buildStreamEvents("task-1", "Do you want to allow this command?", "");
+    expect(result.events).toHaveLength(2);
+    expect(result.events[0]).toMatchObject({
       type: "task.output",
       taskId: "task-1",
       payload: { chunk: "Do you want to allow this command?" }
     });
-    expect(events[1]).toMatchObject({
+    expect(result.events[1]).toMatchObject({
       type: "task.waiting_approval",
+      taskId: "task-1"
+    });
+    expect(result.carryover).toBe("");
+  });
+
+  it("detects waiting prompts that arrive across chunk boundaries", () => {
+    const first = buildStreamEvents("task-1", "Do you want to allow", "");
+    expect(first.events).toHaveLength(1);
+    expect(first.events[0]).toMatchObject({
+      type: "task.output",
+      taskId: "task-1",
+      payload: { chunk: "Do you want to allow" }
+    });
+
+    const second = buildStreamEvents("task-1", " this command?", first.carryover);
+    expect(second.events).toHaveLength(2);
+    expect(second.events[0]).toMatchObject({
+      type: "task.output",
+      taskId: "task-1",
+      payload: { chunk: " this command?" }
+    });
+    expect(second.events[1]).toMatchObject({
+      type: "task.waiting_approval",
+      taskId: "task-1"
+    });
+  });
+});
+
+describe("resolveCloseEvents", () => {
+  it("emits task.finished when codex exits cleanly", () => {
+    const result = buildCloseEvents("task-1", 0, null);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.events).toHaveLength(1);
+    expect(result.events[0]).toMatchObject({
+      type: "task.finished",
       taskId: "task-1"
     });
   });

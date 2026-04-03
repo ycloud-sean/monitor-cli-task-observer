@@ -31,14 +31,51 @@ export function resolveProcessExitCode(
   return typeof signalCode === "number" ? 128 + signalCode : 1;
 }
 
-export function buildStdoutEvents(taskId: string, chunk: string): TaskEvent[] {
+export function buildStreamEvents(
+  taskId: string,
+  chunk: string,
+  carryover: string
+): { events: TaskEvent[]; carryover: string } {
   const at = new Date().toISOString();
   const events: TaskEvent[] = [{ type: "task.output", taskId, at, payload: { chunk } }];
-  const waitState = detectCodexWaitState(chunk);
+  const combined = `${carryover}${chunk}`.slice(-512);
+  const waitState = detectCodexWaitState(combined);
   if (waitState) {
     events.push({ type: `task.${waitState}`, taskId, at } as TaskEvent);
+    return { events, carryover: "" };
   }
-  return events;
+  return { events, carryover: combined };
+}
+
+export function buildCloseEvents(
+  taskId: string,
+  code: number | null,
+  signal: NodeJS.Signals | null
+): { exitCode: number; events: TaskEvent[] } {
+  const exitCode = resolveProcessExitCode(code, signal);
+  if (exitCode === 0) {
+    return {
+      exitCode,
+      events: [{ type: "task.finished", taskId, at: new Date().toISOString() }]
+    };
+  }
+
+  const detail =
+    signal && code === null
+      ? `signal ${signal}`
+      : `code ${typeof code === "number" ? code : exitCode}`;
+
+  return {
+    exitCode,
+    events: [
+      {
+        type: "task.error",
+        taskId,
+        at: new Date().toISOString(),
+        payload: { message: `codex exited with ${detail}` }
+      }
+    ]
+  };
 }
 
 export function createEventQueue(
@@ -86,6 +123,8 @@ export async function main(): Promise<void> {
   const enqueueEvent = eventQueue.enqueue;
   let didSpawn = false;
   let hasExited = false;
+  let stdoutCarryover = "";
+  let stderrCarryover = "";
   const flushAndExit = (exitCode: number): void => {
     if (hasExited) return;
     hasExited = true;
@@ -125,7 +164,9 @@ export async function main(): Promise<void> {
   child.stdout?.setEncoding("utf8");
   child.stdout?.on("data", (chunk: string) => {
     process.stdout.write(chunk);
-    for (const event of buildStdoutEvents(taskId, chunk)) {
+    const result = buildStreamEvents(taskId, chunk, stdoutCarryover);
+    stdoutCarryover = result.carryover;
+    for (const event of result.events) {
       enqueueEvent(event);
     }
   });
@@ -133,12 +174,11 @@ export async function main(): Promise<void> {
   child.stderr?.setEncoding("utf8");
   child.stderr?.on("data", (chunk: string) => {
     process.stderr.write(chunk);
-    enqueueEvent({
-      type: "task.output",
-      taskId,
-      at: new Date().toISOString(),
-      payload: { chunk }
-    });
+    const result = buildStreamEvents(taskId, chunk, stderrCarryover);
+    stderrCarryover = result.carryover;
+    for (const event of result.events) {
+      enqueueEvent(event);
+    }
   });
 
   child.on("error", (error) => {
@@ -154,20 +194,11 @@ export async function main(): Promise<void> {
   });
 
   child.on("close", (code, signal) => {
-    const exitCode = resolveProcessExitCode(code, signal);
-    if (exitCode !== 0) {
-      const detail =
-        signal && code === null
-          ? `signal ${signal}`
-          : `code ${typeof code === "number" ? code : exitCode}`;
-      enqueueEvent({
-        type: "task.error",
-        taskId,
-        at: new Date().toISOString(),
-        payload: { message: `codex exited with ${detail}` }
-      });
+    const result = buildCloseEvents(taskId, code, signal);
+    for (const event of result.events) {
+      enqueueEvent(event);
     }
-    flushAndExit(exitCode);
+    flushAndExit(result.exitCode);
   });
 }
 
