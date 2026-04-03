@@ -1,9 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
-import { constants as osConstants } from "node:os";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { constants as osConstants, tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 import type { TaskEvent, TaskRecord } from "@monitor/contracts";
+import { buildClaudeSettings } from "../lib/adapters/claude.js";
 import { DaemonClient } from "../lib/http-client.js";
 import { buildCodexCommand, detectCodexWaitState } from "../lib/adapters/codex.js";
 import { detectHostMetadata } from "../lib/host-metadata.js";
@@ -34,12 +36,13 @@ export function resolveProcessExitCode(
 export function buildStreamEvents(
   taskId: string,
   chunk: string,
-  carryover: string
+  carryover: string,
+  runner: TaskRecord["runnerType"] = "codex"
 ): { events: TaskEvent[]; carryover: string } {
   const at = new Date().toISOString();
   const events: TaskEvent[] = [{ type: "task.output", taskId, at, payload: { chunk } }];
   const combined = `${carryover}${chunk}`.slice(-512);
-  const waitState = detectCodexWaitState(combined);
+  const waitState = runner === "codex" ? detectCodexWaitState(combined) : null;
   if (waitState) {
     events.push({ type: `task.${waitState}`, taskId, at } as TaskEvent);
     return { events, carryover: "" };
@@ -50,7 +53,8 @@ export function buildStreamEvents(
 export function buildCloseEvents(
   taskId: string,
   code: number | null,
-  signal: NodeJS.Signals | null
+  signal: NodeJS.Signals | null,
+  runner: TaskRecord["runnerType"] = "codex"
 ): { exitCode: number; events: TaskEvent[] } {
   const exitCode = resolveProcessExitCode(code, signal);
   if (exitCode === 0) {
@@ -72,7 +76,7 @@ export function buildCloseEvents(
         type: "task.error",
         taskId,
         at: new Date().toISOString(),
-        payload: { message: `codex exited with ${detail}` }
+        payload: { message: `${runner} exited with ${detail}` }
       }
     ]
   };
@@ -96,21 +100,42 @@ export async function main(): Promise<void> {
   const forwardedArgs = process.argv.slice(2);
   const [runner, ...runnerArgs] = forwardedArgs;
 
-  if (runner !== "codex") {
-    throw new Error("Task 4 only supports monitor codex");
+  if (runner !== "codex" && runner !== "claude") {
+    throw new Error(`unsupported runner: ${runner ?? ""}`);
   }
+  const runnerType: TaskRecord["runnerType"] = runner;
 
   const { name, remainingArgs } = parseNameArg(runnerArgs);
   const taskId = randomUUID();
-  const displayName = name || `codex-${taskId.slice(0, 8)}`;
+  const displayName = name || `${runnerType}-${taskId.slice(0, 8)}`;
   const hookPath = join(dirname(fileURLToPath(import.meta.url)), "monitor-hook.js");
+  const baseHookCommand = [process.execPath, hookPath];
+  let command: string[];
 
-  const command = buildCodexCommand({
-    taskId,
-    daemonUrl,
-    hookCommand: [process.execPath, hookPath],
-    forwardedArgs: ["codex", ...remainingArgs]
-  });
+  if (runnerType === "codex") {
+    command = buildCodexCommand({
+      taskId,
+      daemonUrl,
+      hookCommand: baseHookCommand,
+      forwardedArgs: ["codex", ...remainingArgs]
+    });
+  } else {
+    const settings = buildClaudeSettings({
+      taskId,
+      daemonUrl,
+      hookCommand: baseHookCommand
+    });
+    const settingsDir = mkdtempSync(join(tmpdir(), "monitor-claude-"));
+    const settingsPath = join(settingsDir, "settings.json");
+    writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+    command = [
+      "claude",
+      "--settings",
+      settingsPath,
+      ...(name ? ["-n", name] : []),
+      ...remainingArgs
+    ];
+  }
 
   const child = spawn(command[0], command.slice(1), {
     stdio: ["inherit", "pipe", "pipe"]
@@ -141,7 +166,7 @@ export async function main(): Promise<void> {
     const task: TaskRecord = {
       taskId,
       name: displayName,
-      runnerType: "codex",
+      runnerType,
       rawCommand: command,
       cwd: process.cwd(),
       pid: child.pid ?? -1,
@@ -164,7 +189,7 @@ export async function main(): Promise<void> {
   child.stdout?.setEncoding("utf8");
   child.stdout?.on("data", (chunk: string) => {
     process.stdout.write(chunk);
-    const result = buildStreamEvents(taskId, chunk, stdoutCarryover);
+    const result = buildStreamEvents(taskId, chunk, stdoutCarryover, runnerType);
     stdoutCarryover = result.carryover;
     for (const event of result.events) {
       enqueueEvent(event);
@@ -174,7 +199,7 @@ export async function main(): Promise<void> {
   child.stderr?.setEncoding("utf8");
   child.stderr?.on("data", (chunk: string) => {
     process.stderr.write(chunk);
-    const result = buildStreamEvents(taskId, chunk, stderrCarryover);
+    const result = buildStreamEvents(taskId, chunk, stderrCarryover, runnerType);
     stderrCarryover = result.carryover;
     for (const event of result.events) {
       enqueueEvent(event);
@@ -186,7 +211,7 @@ export async function main(): Promise<void> {
       type: "task.error",
       taskId,
       at: new Date().toISOString(),
-      payload: { message: `failed to spawn codex: ${String(error)}` }
+      payload: { message: `failed to spawn ${runnerType}: ${String(error)}` }
     });
     if (!didSpawn) {
       flushAndExit(1);
@@ -194,7 +219,7 @@ export async function main(): Promise<void> {
   });
 
   child.on("close", (code, signal) => {
-    const result = buildCloseEvents(taskId, code, signal);
+    const result = buildCloseEvents(taskId, code, signal, runnerType);
     for (const event of result.events) {
       enqueueEvent(event);
     }

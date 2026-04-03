@@ -1,6 +1,7 @@
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DaemonClient } from "../lib/http-client.js";
+import { translateClaudeHook } from "../lib/adapters/claude.js";
 import { translateCodexNotify } from "../lib/adapters/codex.js";
 
 export function parseHookArgs(argv: string[]): {
@@ -9,7 +10,7 @@ export function parseHookArgs(argv: string[]): {
   daemonUrl: string;
   payloadText: string;
 } {
-  const runnerIndex = argv.findIndex((arg) => arg === "codex");
+  const runnerIndex = argv.findIndex((arg) => arg === "codex" || arg === "claude");
   if (runnerIndex < 0) {
     return { runner: "", taskId: "", daemonUrl: "", payloadText: "{}" };
   }
@@ -39,19 +40,36 @@ export function parseHookPayload(payloadText: string): Record<string, unknown> {
   return { raw: payloadText };
 }
 
+async function readStdin(): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) chunks.push(Buffer.from(chunk));
+  return Buffer.concat(chunks).toString("utf8");
+}
+
 export async function main(): Promise<void> {
   const { runner, taskId, daemonUrl, payloadText } = parseHookArgs(process.argv);
   if (!runner || !taskId || !daemonUrl) {
     throw new Error("Usage: monitor-hook <runner> <taskId> <daemonUrl> [payload]");
   }
 
-  if (runner !== "codex") return;
-
-  const payload = parseHookPayload(payloadText);
+  const stdinPayload = await readStdin();
   const client = new DaemonClient(daemonUrl);
-  const event = translateCodexNotify(taskId, payload);
-  if (event) {
-    await client.postEvent(event);
+
+  if (runner === "codex") {
+    const payload = parseHookPayload(payloadText);
+    const event = translateCodexNotify(taskId, payload);
+    if (event) {
+      await client.postEvent(event);
+    }
+    return;
+  }
+
+  if (runner === "claude") {
+    if (payloadText !== "Notification" && payloadText !== "Stop") {
+      return;
+    }
+
+    await client.postEvent(translateClaudeHook(taskId, payloadText, stdinPayload));
   }
 }
 

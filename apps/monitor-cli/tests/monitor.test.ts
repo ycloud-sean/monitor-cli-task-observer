@@ -62,6 +62,22 @@ describe("buildStreamEvents", () => {
       taskId: "task-1"
     });
   });
+
+  it("does not infer codex wait states for claude output", () => {
+    const result = buildStreamEvents(
+      "task-1",
+      "waiting for input",
+      "",
+      "claude"
+    );
+
+    expect(result.events).toHaveLength(1);
+    expect(result.events[0]).toMatchObject({
+      type: "task.output",
+      taskId: "task-1",
+      payload: { chunk: "waiting for input" }
+    });
+  });
 });
 
 describe("resolveCloseEvents", () => {
@@ -73,6 +89,15 @@ describe("resolveCloseEvents", () => {
     expect(result.events[0]).toMatchObject({
       type: "task.finished",
       taskId: "task-1"
+    });
+  });
+
+  it("includes the runner name in non-zero exit errors", () => {
+    const result = buildCloseEvents("task-1", 1, null, "claude");
+
+    expect(result.events[0]).toMatchObject({
+      type: "task.error",
+      payload: { message: "claude exited with code 1" }
     });
   });
 });
@@ -103,6 +128,23 @@ describe("createEventQueue", () => {
 });
 
 describe("monitor-hook argument/payload parsing", () => {
+  it("parses claude hook names from positional arguments", () => {
+    const args = parseHookArgs([
+      "node",
+      "monitor-hook.js",
+      "claude",
+      "task-1",
+      "http://127.0.0.1:45731",
+      "Notification"
+    ]);
+    expect(args).toEqual({
+      runner: "claude",
+      taskId: "task-1",
+      daemonUrl: "http://127.0.0.1:45731",
+      payloadText: "Notification"
+    });
+  });
+
   it("falls back to the last argv entry for payload text", () => {
     const args = parseHookArgs([
       "node",
