@@ -5,16 +5,6 @@ import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
 import type { TaskRecord } from "@monitor/contracts";
 
-const require = createRequire(import.meta.url);
-const notifierPackageDir = dirname(require.resolve("terminal-notifier"));
-const bundledNotifierAppDir = join(notifierPackageDir, "terminal-notifier.app");
-const bundledNotifierBinary = join(
-  bundledNotifierAppDir,
-  "Contents",
-  "MacOS",
-  "terminal-notifier"
-);
-
 function shouldNotify(status: TaskRecord["status"]): boolean {
   return (
     status === "waiting_input" ||
@@ -22,6 +12,30 @@ function shouldNotify(status: TaskRecord["status"]): boolean {
     status === "finished" ||
     status === "error"
   );
+}
+
+function resolveBundledNotifierAppDir(): string {
+  const require = createRequire(import.meta.url);
+  const notifierPackageDir = dirname(require.resolve("terminal-notifier"));
+  return join(notifierPackageDir, "terminal-notifier.app");
+}
+
+export function isNotificationSupported(
+  platform: NodeJS.Platform = process.platform
+): boolean {
+  return platform === "darwin";
+}
+
+export function shouldNotifyTaskUpdate(
+  previous: TaskRecord | undefined,
+  next: TaskRecord,
+  platform: NodeJS.Platform = process.platform
+): boolean {
+  if (!isNotificationSupported(platform) || !shouldNotify(next.status)) {
+    return false;
+  }
+
+  return previous?.status !== next.status;
 }
 
 function buildMessage(task: TaskRecord): string {
@@ -41,10 +55,11 @@ function buildMessage(task: TaskRecord): string {
 }
 
 export async function notifyTask(task: TaskRecord): Promise<void> {
-  if (!shouldNotify(task.status)) {
+  if (!shouldNotifyTaskUpdate(undefined, task)) {
     return;
   }
 
+  const bundledNotifierAppDir = resolveBundledNotifierAppDir();
   const tempAppDir = await mkdtemp(join(tmpdir(), "monitor-terminal-notifier-"));
 
   try {
