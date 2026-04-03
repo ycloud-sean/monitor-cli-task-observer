@@ -17,11 +17,7 @@ export async function createDaemonServer(options: {
   const server = createServer(async (req, res) => {
     if (req.method === "GET" && req.url === "/tasks") {
       res.setHeader("content-type", "application/json");
-      res.end(
-        JSON.stringify(
-          registry.list().map((task) => ({ taskId: task.taskId, name: task.name }))
-        )
-      );
+      res.end(JSON.stringify(registry.list()));
       return;
     }
 

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { TaskRecord } from "@monitor/contracts";
 import { createDaemonServer } from "../src/lib/server.js";
 
 describe("daemon server", () => {
@@ -44,9 +45,25 @@ describe("daemon server", () => {
       });
 
       const response = await fetch(`${baseUrl}/tasks`);
-      const tasks = (await response.json()) as Array<{ taskId: string; name: string }>;
+      const tasks = (await response.json()) as TaskRecord[];
 
-      expect(tasks).toEqual([{ taskId: "task-1", name: "api-fix" }]);
+      expect(tasks).toEqual([
+        {
+          taskId: "task-1",
+          name: "api-fix",
+          runnerType: "codex",
+          rawCommand: ["codex"],
+          cwd: "/tmp/project",
+          pid: 123,
+          hostApp: "terminal",
+          hostWindowRef: "window-1",
+          hostSessionRef: "tab-1",
+          startedAt: "2026-04-03T08:00:00.000Z",
+          lastEventAt: "2026-04-03T08:00:00.000Z",
+          status: "running",
+          lastOutputExcerpt: ""
+        }
+      ]);
     } finally {
       await server.close();
     }
