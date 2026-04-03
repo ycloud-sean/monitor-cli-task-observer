@@ -133,6 +133,31 @@ describe("TaskRegistry", () => {
     );
   });
 
+  it("ignores stale task.started events when a newer record already exists", () => {
+    const registry = new TaskRegistry();
+    const newerTask = {
+      ...makeTask(),
+      startedAt: "2026-04-03T08:03:00.000Z",
+      lastEventAt: "2026-04-03T08:03:00.000Z",
+      status: "waiting_input" as const
+    };
+    registry.upsert(newerTask);
+
+    registry.apply({
+      type: "task.started",
+      taskId: newerTask.taskId,
+      at: "2026-04-03T08:01:00.000Z",
+      payload: {
+        ...newerTask,
+        startedAt: "2026-04-03T08:01:00.000Z",
+        lastEventAt: "2026-04-03T08:01:00.000Z",
+        status: "running"
+      }
+    });
+
+    expect(registry.get(newerTask.taskId)).toEqual(newerTask);
+  });
+
   it("returns undefined for unknown-task events", () => {
     const registry = new TaskRegistry();
 

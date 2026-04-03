@@ -14,6 +14,13 @@ export class TaskRegistry {
 
   apply(event: TaskEvent): TaskRecord | undefined {
     if (event.type === "task.started") {
+      const current = this.#tasks.get(event.taskId);
+      if (
+        current &&
+        event.payload.lastEventAt.localeCompare(current.lastEventAt) <= 0
+      ) {
+        return current;
+      }
       this.upsert(event.payload);
       return event.payload;
     }
