@@ -1,6 +1,24 @@
 import type { TaskEvent, TaskRecord } from "@monitor/contracts";
 
-export function applyEvent(task: TaskRecord, event: TaskEvent): TaskRecord {
+type TaskTransitionEvent = Exclude<TaskEvent, { type: "task.started" }>;
+
+function assertNever(value: never): never {
+  throw new Error(`Unhandled task transition event: ${JSON.stringify(value)}`);
+}
+
+export function applyEvent(
+  task: TaskRecord,
+  event: TaskTransitionEvent
+): TaskRecord {
+  if (event.at < task.lastEventAt) return task;
+
+  const isTerminalTask = task.status === "finished" || task.status === "error";
+  const isNonTerminalEvent =
+    event.type === "task.output" ||
+    event.type === "task.waiting_input" ||
+    event.type === "task.waiting_approval";
+  if (isTerminalTask && isNonTerminalEvent) return task;
+
   switch (event.type) {
     case "task.output":
       return {
@@ -25,7 +43,7 @@ export function applyEvent(task: TaskRecord, event: TaskEvent): TaskRecord {
         lastEventAt: event.at,
         lastOutputExcerpt: event.payload.message
       };
-    default:
-      return task;
   }
+
+  return assertNever(event);
 }

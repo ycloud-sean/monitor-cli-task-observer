@@ -1,4 +1,8 @@
-import type { TaskEvent, TaskRecord } from "@monitor/contracts";
+import {
+  isWaitingState,
+  type TaskEvent,
+  type TaskRecord
+} from "@monitor/contracts";
 import { applyEvent } from "./state-machine.js";
 
 export class TaskRegistry {
@@ -34,7 +38,7 @@ export class TaskRegistry {
 
   listActive(): TaskRecord[] {
     return this.list().filter(
-      (task) => task.status === "running" || task.status.startsWith("waiting_")
+      (task) => task.status === "running" || isWaitingState(task.status)
     );
   }
 }
