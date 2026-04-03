@@ -14,9 +14,11 @@
     "lint": "tsc -p tsconfig.lint.json --noEmit"
   },
   "dependencies": {
-    "@monitor/contracts": "0.1.0"
+    "@monitor/contracts": "0.1.0",
+    "better-sqlite3": "^12.8.0"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.15.3",
     "typescript": "^5.8.3",
     "vitest": "^3.2.4"
