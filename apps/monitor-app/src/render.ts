@@ -1,14 +1,23 @@
 import type { TaskRecord } from "@monitor/contracts";
 import type { TaskViewModel } from "./store";
 
+export function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function renderTaskRow(task: TaskRecord, selectedTaskId?: string): string {
   const selectedClass = task.taskId === selectedTaskId ? " selected" : "";
 
   return `
-    <button class="task-row${selectedClass}" data-task-id="${task.taskId}">
-      <strong>${task.name}</strong>
-      <span>${task.runnerType}</span>
-      <span>${task.status}</span>
+    <button class="task-row${selectedClass}" data-task-id="${escapeHtml(task.taskId)}">
+      <strong>${escapeHtml(task.name)}</strong>
+      <span>${escapeHtml(task.runnerType)}</span>
+      <span>${escapeHtml(task.status)}</span>
       <span class="task-meta">${new Date(task.lastEventAt).toLocaleTimeString()}</span>
     </button>
   `;
@@ -31,18 +40,18 @@ export function renderTasks(root: HTMLElement, viewModel: TaskViewModel) {
           ? `
             <header class="task-detail-header">
               <div>
-                <h2>${detail.name}</h2>
-                <p>${detail.runnerType} · ${detail.status}</p>
+                <h2>${escapeHtml(detail.name)}</h2>
+                <p>${escapeHtml(detail.runnerType)} · ${escapeHtml(detail.status)}</p>
               </div>
-              <button class="focus-task" data-task-id="${detail.taskId}">Focus task</button>
+              <button class="focus-task" data-task-id="${escapeHtml(detail.taskId)}">Focus task</button>
             </header>
             <dl>
               <dt>Command</dt>
-              <dd>${detail.rawCommand.join(" ")}</dd>
+              <dd>${escapeHtml(detail.rawCommand.join(" "))}</dd>
               <dt>Working directory</dt>
-              <dd>${detail.cwd}</dd>
+              <dd>${escapeHtml(detail.cwd)}</dd>
               <dt>Recent output</dt>
-              <dd>${detail.lastOutputExcerpt || "No output captured yet."}</dd>
+              <dd>${escapeHtml(detail.lastOutputExcerpt || "No output captured yet.")}</dd>
             </dl>
           `
           : `<p class="muted">Select a task to inspect it.</p>`
