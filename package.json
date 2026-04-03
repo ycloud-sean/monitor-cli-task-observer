@@ -1,0 +1,22 @@
+{
+  "name": "monitor-cli-task-observer",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "npm run -ws test",
+    "build": "npm run -ws build",
+    "lint": "npm run -ws lint"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ]
+}
