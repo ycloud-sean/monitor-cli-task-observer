@@ -29,7 +29,18 @@ describe("translateCodexNotify", () => {
       "last-assistant-message": "done"
     });
 
+    expect(event).not.toBeNull();
+    if (!event) throw new Error("expected event");
     expect(event.type).toBe("task.finished");
+  });
+
+  it("returns null for unknown payloads to avoid duplicate output", () => {
+    const event = translateCodexNotify("task-1", {
+      type: "unknown-event",
+      foo: "bar"
+    });
+
+    expect(event).toBeNull();
   });
 });
 

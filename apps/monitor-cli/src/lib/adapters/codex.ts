@@ -19,7 +19,7 @@ export function buildCodexCommand(options: {
 export function translateCodexNotify(
   taskId: string,
   payload: Record<string, unknown>
-): TaskEvent {
+): TaskEvent | null {
   if (payload.type === "agent-turn-complete") {
     return {
       type: "task.finished",
@@ -28,12 +28,7 @@ export function translateCodexNotify(
     };
   }
 
-  return {
-    type: "task.output",
-    taskId,
-    at: new Date().toISOString(),
-    payload: { chunk: JSON.stringify(payload) }
-  };
+  return null;
 }
 
 export function detectCodexWaitState(

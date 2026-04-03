@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
+import { constants as osConstants } from "node:os";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import type { TaskEvent, TaskRecord } from "@monitor/contracts";
 import { DaemonClient } from "../lib/http-client.js";
 import { buildCodexCommand, detectCodexWaitState } from "../lib/adapters/codex.js";
@@ -9,17 +10,51 @@ import { detectHostMetadata } from "../lib/host-metadata.js";
 
 const DEFAULT_DAEMON_URL = "http://127.0.0.1:45731";
 
-function parseNameArg(args: string[]): { name: string; remainingArgs: string[] } {
+export function parseNameArg(args: string[]): { name: string; remainingArgs: string[] } {
   const nameIndex = args.indexOf("--name");
   if (nameIndex < 0) return { name: "", remainingArgs: [...args] };
 
-  const name = args[nameIndex + 1] ?? "";
+  const candidateName = args[nameIndex + 1] ?? "";
+  const name = candidateName.startsWith("-") ? "" : candidateName;
   const remainingArgs = [...args];
   remainingArgs.splice(nameIndex, name ? 2 : 1);
   return { name, remainingArgs };
 }
 
-async function main(): Promise<void> {
+export function resolveProcessExitCode(
+  code: number | null,
+  signal: NodeJS.Signals | null
+): number {
+  if (typeof code === "number") return code;
+  if (!signal) return 0;
+  const signalCode = osConstants.signals[signal];
+  return typeof signalCode === "number" ? 128 + signalCode : 1;
+}
+
+export function buildStdoutEvents(taskId: string, chunk: string): TaskEvent[] {
+  const at = new Date().toISOString();
+  const events: TaskEvent[] = [{ type: "task.output", taskId, at, payload: { chunk } }];
+  const waitState = detectCodexWaitState(chunk);
+  if (waitState) {
+    events.push({ type: `task.${waitState}`, taskId, at } as TaskEvent);
+  }
+  return events;
+}
+
+export function createEventQueue(
+  postEvent: (event: TaskEvent) => Promise<void>,
+  onError: (error: unknown) => void
+): { enqueue: (event: TaskEvent) => void; drain: () => Promise<void> } {
+  let eventQueue = Promise.resolve();
+  const enqueue = (event: TaskEvent): void => {
+    eventQueue = eventQueue
+      .then(() => postEvent(event))
+      .catch((error) => onError(error));
+  };
+  return { enqueue, drain: () => eventQueue };
+}
+
+export async function main(): Promise<void> {
   const daemonUrl = process.env.MONITOR_DAEMON_URL ?? DEFAULT_DAEMON_URL;
   const forwardedArgs = process.argv.slice(2);
   const [runner, ...runnerArgs] = forwardedArgs;
@@ -44,47 +79,55 @@ async function main(): Promise<void> {
     stdio: ["inherit", "pipe", "pipe"]
   });
 
-  const startedAt = new Date().toISOString();
-  const host = detectHostMetadata();
-  const task: TaskRecord = {
-    taskId,
-    name: displayName,
-    runnerType: "codex",
-    rawCommand: command,
-    cwd: process.cwd(),
-    pid: child.pid ?? -1,
-    hostApp: host.hostApp,
-    hostWindowRef: host.hostWindowRef,
-    hostSessionRef: host.hostSessionRef,
-    startedAt,
-    lastEventAt: startedAt,
-    status: "running",
-    lastOutputExcerpt: ""
-  };
-
   const client = new DaemonClient(daemonUrl);
-  let eventQueue = Promise.resolve();
-  const enqueueEvent = (event: TaskEvent): void => {
-    eventQueue = eventQueue.then(() => client.postEvent(event));
+  const eventQueue = createEventQueue((event) => client.postEvent(event), (error) => {
+    process.stderr.write(`failed to post task event: ${String(error)}\n`);
+  });
+  const enqueueEvent = eventQueue.enqueue;
+  let didSpawn = false;
+  let hasExited = false;
+  const flushAndExit = (exitCode: number): void => {
+    if (hasExited) return;
+    hasExited = true;
+    void eventQueue
+      .drain()
+      .then(() => process.exit(exitCode))
+      .catch(() => process.exit(1));
   };
 
-  enqueueEvent({
-    type: "task.started",
-    taskId,
-    at: startedAt,
-    payload: task
+  child.on("spawn", () => {
+    didSpawn = true;
+    const startedAt = new Date().toISOString();
+    const host = detectHostMetadata();
+    const task: TaskRecord = {
+      taskId,
+      name: displayName,
+      runnerType: "codex",
+      rawCommand: command,
+      cwd: process.cwd(),
+      pid: child.pid ?? -1,
+      hostApp: host.hostApp,
+      hostWindowRef: host.hostWindowRef,
+      hostSessionRef: host.hostSessionRef,
+      startedAt,
+      lastEventAt: startedAt,
+      status: "running",
+      lastOutputExcerpt: ""
+    };
+    enqueueEvent({
+      type: "task.started",
+      taskId,
+      at: startedAt,
+      payload: task
+    });
   });
 
   child.stdout?.setEncoding("utf8");
   child.stdout?.on("data", (chunk: string) => {
     process.stdout.write(chunk);
-    const waitState = detectCodexWaitState(chunk);
-    const at = new Date().toISOString();
-    if (waitState) {
-      enqueueEvent({ type: `task.${waitState}`, taskId, at } as TaskEvent);
-      return;
+    for (const event of buildStdoutEvents(taskId, chunk)) {
+      enqueueEvent(event);
     }
-    enqueueEvent({ type: "task.output", taskId, at, payload: { chunk } });
   });
 
   child.stderr?.setEncoding("utf8");
@@ -105,29 +148,36 @@ async function main(): Promise<void> {
       at: new Date().toISOString(),
       payload: { message: `failed to spawn codex: ${String(error)}` }
     });
+    if (!didSpawn) {
+      flushAndExit(1);
+    }
   });
 
-  child.on("exit", async (code) => {
-    if (code && code !== 0) {
+  child.on("close", (code, signal) => {
+    const exitCode = resolveProcessExitCode(code, signal);
+    if (exitCode !== 0) {
+      const detail =
+        signal && code === null
+          ? `signal ${signal}`
+          : `code ${typeof code === "number" ? code : exitCode}`;
       enqueueEvent({
         type: "task.error",
         taskId,
         at: new Date().toISOString(),
-        payload: { message: `codex exited with code ${code}` }
+        payload: { message: `codex exited with ${detail}` }
       });
     }
-
-    try {
-      await eventQueue;
-      process.exit(code ?? 0);
-    } catch (error) {
-      process.stderr.write(`failed to post task event: ${String(error)}\n`);
-      process.exit(1);
-    }
+    flushAndExit(exitCode);
   });
 }
 
-main().catch((error) => {
-  process.stderr.write(String(error) + "\n");
-  process.exit(1);
-});
+const isDirectExecution = process.argv[1]
+  ? fileURLToPath(import.meta.url) === resolve(process.argv[1])
+  : false;
+
+if (isDirectExecution) {
+  main().catch((error) => {
+    process.stderr.write(String(error) + "\n");
+    process.exit(1);
+  });
+}
