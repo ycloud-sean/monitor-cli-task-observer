@@ -5,21 +5,25 @@ describe("buildFocusScript", () => {
   it("returns Terminal.app AppleScript for terminal tasks", () => {
     const script = buildFocusScript({
       hostApp: "terminal",
-      hostWindowRef: "window-1",
-      hostSessionRef: "tab-1"
+      hostWindowRef: "42",
+      hostSessionRef: "/dev/ttys001"
     });
 
     expect(script).toContain('tell application "Terminal"');
+    expect(script).toContain('/dev/ttys001');
+    expect(script).toContain("42");
   });
 
   it("returns iTerm2 AppleScript for iterm tasks", () => {
     const script = buildFocusScript({
       hostApp: "iterm2",
-      hostWindowRef: "window-1",
-      hostSessionRef: "session-1"
+      hostWindowRef: null,
+      hostSessionRef: "/dev/ttys002"
     });
 
     expect(script).toContain('tell application "iTerm2"');
+    expect(script).toContain('/dev/ttys002');
+    expect(script).toContain("select");
   });
 
   it("returns a Cursor activation script for cursor tasks", () => {
