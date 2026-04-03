@@ -21,4 +21,14 @@ describe("buildFocusScript", () => {
 
     expect(script).toContain('tell application "iTerm2"');
   });
+
+  it("returns a Cursor activation script for cursor tasks", () => {
+    const script = buildFocusScript({
+      hostApp: "cursor",
+      hostWindowRef: "cursor-window-1",
+      hostSessionRef: "pane-1"
+    });
+
+    expect(script).toContain('tell application "Cursor"');
+  });
 });
