@@ -1,0 +1,24 @@
+{
+  "name": "@monitor/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "monitor": "dist/bin/monitor.js",
+    "monitord": "dist/bin/monitord.js",
+    "monitor-hook": "dist/bin/monitor-hook.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "lint": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@monitor/contracts": "0.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  }
+}
