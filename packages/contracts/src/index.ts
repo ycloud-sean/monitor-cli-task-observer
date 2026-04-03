@@ -16,8 +16,8 @@ export interface TaskRecord {
   cwd: string;
   pid: number;
   hostApp: HostApp;
-  hostWindowRef: string;
-  hostSessionRef: string;
+  hostWindowRef: string | null;
+  hostSessionRef: string | null;
   startedAt: string;
   lastEventAt: string;
   status: TaskStatus;

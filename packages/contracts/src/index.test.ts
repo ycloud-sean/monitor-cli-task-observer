@@ -38,4 +38,26 @@ describe("contracts", () => {
     expect(task.status).toBe("running");
     expect(event.type).toBe("task.finished");
   });
+
+  it("models unknown host records without invented identifiers", () => {
+    const unknownHostTask: TaskRecord = {
+      taskId: "task-unknown-host",
+      name: "background-task",
+      runnerType: "claude",
+      rawCommand: ["claude"],
+      cwd: "/tmp/project",
+      pid: 456,
+      hostApp: "unknown",
+      hostWindowRef: null,
+      hostSessionRef: null,
+      startedAt: "2026-04-03T09:00:00.000Z",
+      lastEventAt: "2026-04-03T09:00:00.000Z",
+      status: "running",
+      lastOutputExcerpt: ""
+    };
+
+    expect(unknownHostTask.hostApp).toBe("unknown");
+    expect(unknownHostTask.hostWindowRef).toBeNull();
+    expect(unknownHostTask.hostSessionRef).toBeNull();
+  });
 });
