@@ -12,10 +12,6 @@ export function applyEvent(
 ): TaskRecord {
   if (event.at < task.lastEventAt) return task;
 
-  const isTerminalEvent =
-    event.type === "task.finished" || event.type === "task.error";
-  if (event.at === task.lastEventAt && !isTerminalEvent) return task;
-
   const isTerminalTask = task.status === "finished" || task.status === "error";
   const isNonTerminalEvent =
     event.type === "task.output" ||
