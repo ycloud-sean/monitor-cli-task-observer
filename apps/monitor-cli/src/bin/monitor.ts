@@ -9,6 +9,7 @@ import { dirname, join } from "node:path";
 import type { TaskEvent, TaskRecord } from "@monitor/contracts";
 import { buildClaudeSettings } from "../lib/adapters/claude.js";
 import { isDirectExecution } from "../lib/bin-entry.js";
+import { ensureDaemonRunning } from "../lib/daemon.js";
 import { DaemonClient } from "../lib/http-client.js";
 import { buildCodexCommand, detectCodexWaitState } from "../lib/adapters/codex.js";
 import { detectHostMetadata } from "../lib/host-metadata.js";
@@ -117,6 +118,11 @@ export async function main(): Promise<void> {
     throw new Error(`unsupported runner: ${runner ?? ""}`);
   }
   const runnerType: TaskRecord["runnerType"] = runner;
+
+  await ensureDaemonRunning({
+    baseUrl: daemonUrl,
+    moduleUrl: import.meta.url
+  });
 
   const { name, remainingArgs } = parseNameArg(runnerArgs);
   const taskId = randomUUID();

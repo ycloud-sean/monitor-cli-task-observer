@@ -7,6 +7,8 @@
     "doc": "docs"
   },
   "scripts": {
+    "build:installable": "npm run -w @monitor/contracts build && npm run -w @monitor/cli build && npm run -w monitor-cursor-bridge build",
+    "install:local": "bash ./scripts/install.sh",
     "test": "npm run -ws test",
     "build": "npm run -ws build",
     "lint": "npm run -ws lint"

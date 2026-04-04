@@ -179,6 +179,11 @@ async function handleRequest(
   persistence: Persistence
 ): Promise<void> {
   try {
+    if (req.method === "GET" && req.url === "/health") {
+      sendJson(res, 200, { ok: true });
+      return;
+    }
+
     if (req.method === "GET" && req.url === "/tasks") {
       sendJson(res, 200, registry.list());
       return;

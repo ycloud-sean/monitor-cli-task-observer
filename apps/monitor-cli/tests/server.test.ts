@@ -81,6 +81,22 @@ describe("daemon server", () => {
     }
   });
 
+  it("reports daemon health for local startup probes", async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), "monitor-daemon-"));
+    dirs.push(dataDir);
+    const server = await createDaemonServer({ port: 0, dataDir });
+
+    try {
+      const baseUrl = `http://127.0.0.1:${server.port}`;
+      const response = await fetch(`${baseUrl}/health`);
+
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toEqual({ ok: true });
+    } finally {
+      await server.close();
+    }
+  });
+
   it("returns 400 for malformed events JSON and remains usable", async () => {
     const dataDir = mkdtempSync(join(tmpdir(), "monitor-daemon-"));
     dirs.push(dataDir);
