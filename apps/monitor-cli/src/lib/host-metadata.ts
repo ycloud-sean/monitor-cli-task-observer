@@ -16,6 +16,7 @@ export interface DetectHostMetadataOptions {
   cursorTraceId?: string | null;
   cursorAgent?: string | null;
   cursorWindowRef?: string | null;
+  cursorWindowRefResolver?: () => string | null;
   ttyRef?: string | null;
   cwd?: string | null;
 }
@@ -138,22 +139,36 @@ export function resolveCursorWindowRef(): string | null {
       "osascript",
       [
         "-e",
-        'tell application "Cursor" to activate',
+        'tell application "System Events"',
         "-e",
-        "delay 0.2",
+        'if not (exists process "Cursor") then return ""',
         "-e",
-        'tell application "System Events" to tell process "Cursor" to set titleValue to (value of attribute "AXTitle" of front window as text)',
+        'tell process "Cursor"',
         "-e",
-        'tell application "System Events" to tell process "Cursor" to set documentValue to (value of attribute "AXDocument" of front window as text)',
+        'if (count of windows) is 0 then return ""',
         "-e",
-        'tell application "System Events" to tell process "Cursor" to set positionValue to (value of attribute "AXPosition" of front window)',
+        "set targetWindow to front window",
         "-e",
-        'tell application "System Events" to tell process "Cursor" to set sizeValue to (value of attribute "AXSize" of front window)',
+        'set titleValue to (value of attribute "AXTitle" of targetWindow as text)',
         "-e",
-        'return titleValue & linefeed & documentValue & linefeed & (item 1 of positionValue as text) & "," & (item 2 of positionValue as text) & linefeed & (item 1 of sizeValue as text) & "," & (item 2 of sizeValue as text)'
+        'set documentValue to (value of attribute "AXDocument" of targetWindow as text)',
+        "-e",
+        'set positionValue to (value of attribute "AXPosition" of targetWindow)',
+        "-e",
+        'set sizeValue to (value of attribute "AXSize" of targetWindow)',
+        "-e",
+        'return titleValue & linefeed & documentValue & linefeed & (item 1 of positionValue as text) & "," & (item 2 of positionValue as text) & linefeed & (item 1 of sizeValue as text) & "," & (item 2 of sizeValue as text)',
+        "-e",
+        "end tell",
+        "-e",
+        "end tell"
       ],
       { encoding: "utf8" }
     ).trim();
+
+    if (!output) {
+      return null;
+    }
 
     const snapshot = parseCursorWindowSnapshotLines(output.split(/\r?\n/));
     return snapshot ? serializeCursorWindowSnapshot(snapshot) : null;
@@ -170,19 +185,21 @@ export function detectHostMetadata(
     options.termProgramVersion ?? process.env.TERM_PROGRAM_VERSION ?? "";
   const cursorTraceId = options.cursorTraceId ?? process.env.CURSOR_TRACE_ID ?? null;
   const cursorAgent = options.cursorAgent ?? process.env.CURSOR_AGENT ?? null;
-  const cursorWindowRef =
-    options.cursorWindowRef === undefined
-      ? resolveCursorWindowRef()
-      : options.cursorWindowRef;
-  const cwd = options.cwd ?? process.cwd();
-  const termSessionId = options.termSessionId ?? process.env.TERM_SESSION_ID ?? null;
-  const ttyRef = options.ttyRef === undefined ? resolveTtyRef() : options.ttyRef;
   const hostApp = detectHostApp(
     termProgram,
     termProgramVersion,
     cursorTraceId ?? "",
     cursorAgent ?? ""
   );
+  const cursorWindowRef =
+    options.cursorWindowRef !== undefined
+      ? options.cursorWindowRef
+      : hostApp === "cursor"
+        ? (options.cursorWindowRefResolver ?? resolveCursorWindowRef)()
+        : null;
+  const cwd = options.cwd ?? process.cwd();
+  const termSessionId = options.termSessionId ?? process.env.TERM_SESSION_ID ?? null;
+  const ttyRef = options.ttyRef === undefined ? resolveTtyRef() : options.ttyRef;
 
   if (hostApp === "cursor") {
     return {

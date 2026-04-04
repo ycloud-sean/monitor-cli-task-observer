@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { detectHostMetadata } from "../src/lib/host-metadata.js";
 
 describe("detectHostMetadata", () => {
@@ -90,5 +90,38 @@ describe("detectHostMetadata", () => {
     expect(metadata.hostWindowRef).toBe(
       'cursor-window:{"title":"README.md — project-a","document":"file:///tmp/project-a/README.md","workspace":"project-a","x":10,"y":38,"width":1440,"height":900}'
     );
+  });
+
+  it("does not try to resolve a Cursor window when the host is not Cursor", () => {
+    const cursorWindowRefResolver = vi.fn(() => "cursor-window:ignored");
+
+    const metadata = detectHostMetadata({
+      termProgram: "Apple_Terminal",
+      windowId: "42",
+      ttyRef: "/dev/ttys001",
+      cursorWindowRefResolver
+    });
+
+    expect(metadata).toEqual({
+      hostApp: "terminal",
+      hostWindowRef: "42",
+      hostSessionRef: "/dev/ttys001"
+    });
+    expect(cursorWindowRefResolver).not.toHaveBeenCalled();
+  });
+
+  it("gracefully accepts missing Cursor windows", () => {
+    const metadata = detectHostMetadata({
+      termProgram: "vscode",
+      termProgramVersion: "3.0.9",
+      ttyRef: "/dev/ttys004",
+      cursorWindowRefResolver: () => null
+    });
+
+    expect(metadata).toEqual({
+      hostApp: "cursor",
+      hostWindowRef: null,
+      hostSessionRef: null
+    });
   });
 });
