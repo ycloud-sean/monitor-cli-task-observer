@@ -30,7 +30,8 @@ class Monitor < Formula
       #!/bin/bash
       exec "#{Formula["node"].opt_bin}/node" "#{libexec}/apps/monitor-cli/dist/bin/monitord.js" "$@"
     EOS
-    chmod 0755, bin/"monitor", bin/"monitord"
+    chmod 0755, bin/"monitor"
+    chmod 0755, bin/"monitord"
   end
 
   def caveats
