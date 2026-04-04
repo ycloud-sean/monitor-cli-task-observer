@@ -9,6 +9,11 @@ else
   PACKAGE_VERSION="$(node -p "require('$ROOT_DIR/package.json').version")"
   BUNDLE_VERSION="v$PACKAGE_VERSION"
 fi
+if [[ -n "${MONITOR_RUNTIME_NODE_PATH:-}" ]]; then
+  NODE_BIN_PATH="$MONITOR_RUNTIME_NODE_PATH"
+else
+  NODE_BIN_PATH="$(command -v node)"
+fi
 OUT_DIR="$ROOT_DIR/dist-runtime"
 STAGE_DIR="$OUT_DIR/monitor-runtime-$BUNDLE_VERSION"
 
@@ -31,6 +36,13 @@ require_path "$ROOT_DIR/apps/monitor-cli/dist"
 require_path "$ROOT_DIR/packages/contracts/dist"
 require_path "$ROOT_DIR/node_modules/better-sqlite3/build/Release/better_sqlite3.node"
 require_path "$ROOT_DIR/node_modules/terminal-notifier/terminal-notifier.app"
+require_path "$NODE_BIN_PATH"
+
+NODE_MAJOR="$("$NODE_BIN_PATH" -p 'process.versions.node.split(".")[0]')"
+if [[ "$NODE_MAJOR" != "22" ]]; then
+  printf 'runtime bundle 当前要求 Node 22，实际为: %s\n' "$("$NODE_BIN_PATH" -v)" >&2
+  exit 1
+fi
 
 cp -R "$ROOT_DIR/apps/monitor-cli/dist" "$STAGE_DIR/apps/monitor-cli/"
 cp "$ROOT_DIR/apps/monitor-cli/package.json" "$STAGE_DIR/apps/monitor-cli/package.json"
@@ -78,6 +90,10 @@ cp -R \
   "$ROOT_DIR/node_modules/terminal-notifier/terminal-notifier.app" \
   "$STAGE_DIR/node_modules/terminal-notifier/"
 
+mkdir -p "$STAGE_DIR/runtime/bin"
+cp "$NODE_BIN_PATH" "$STAGE_DIR/runtime/bin/node"
+chmod +x "$STAGE_DIR/runtime/bin/node"
+
 mkdir -p "$OUT_DIR"
 ARCHIVE_PATH="$OUT_DIR/monitor-runtime-$BUNDLE_VERSION-macos-arm64.tar.gz"
 rm -f "$ARCHIVE_PATH"
@@ -85,4 +101,6 @@ tar -czf "$ARCHIVE_PATH" -C "$OUT_DIR" "monitor-runtime-$BUNDLE_VERSION"
 
 printf '运行时打包完成:\n'
 printf '  %s\n' "$ARCHIVE_PATH"
+printf '内置 Node:\n'
+printf '  %s\n' "$NODE_BIN_PATH"
 shasum -a 256 "$ARCHIVE_PATH"

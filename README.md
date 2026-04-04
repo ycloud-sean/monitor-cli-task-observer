@@ -41,13 +41,15 @@ export PATH="$HOME/.local/bin:$PATH"
 
 ### 3. Homebrew 安装
 
-如果你更希望走 Homebrew，建议发布到你自己的 tap 后，对外使用这一条命令：
+如果你更希望走 Homebrew，对外建议直接使用这一条命令：
 
 ```bash
-brew install ycloud-sean/monitor/monitor
+HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_FROM_API=1 brew install ycloud-sean/monitor/monitor
 ```
 
-在 tap 还没建好之前，本仓库内用于验证的 formula 仍然在：
+如果你不介意 Homebrew 自己先做自动更新和 API 拉取，也可以去掉前面的两个环境变量。
+
+本仓库内用于验证的 formula 仍然在：
 
 ```bash
 Formula/monitor.rb
@@ -55,6 +57,11 @@ Formula/monitor.rb
 
 说明：
 
+- 这个 Homebrew 包安装的是预构建运行包，不会在用户机器上再执行一次 `npm install + tsc`
+- `HOMEBREW_NO_AUTO_UPDATE=1` 用来避免长时间卡在 `==> Auto-updating Homebrew...`
+- `HOMEBREW_NO_INSTALL_FROM_API=1` 用来避免 Homebrew 5 先去拉 `formulae.brew.sh` 的 API 元数据
+- 当前 Homebrew 分发方案只支持 `macOS arm64`
+- 运行包内已经内置 Node 22，不再依赖用户本机额外安装 `node@22`
 - Homebrew 会把 `monitor` 和 `monitord` 放进自己的 `bin`，所以正常情况下不需要再手动 `source ~/.zshrc`
 - 如果用户是在 Cursor 里第一次执行 `monitor codex` 或 `monitor claude`，`monitor` 会自动补装 Cursor bridge
 - 如果补装发生时 Cursor 已经在运行，需要重启一次 Cursor，确保 bridge 被加载
