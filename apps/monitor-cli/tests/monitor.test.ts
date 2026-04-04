@@ -4,10 +4,12 @@ import {
   buildCloseEvents,
   buildStreamEvents,
   createEventQueue,
+  handleUtilityCommand,
   parseNameArg,
   resolveProcessExitCode
 } from "../src/bin/monitor.js";
 import { parseHookArgs, parseHookPayload } from "../src/bin/monitor-hook.js";
+import * as cursorBridgeInstall from "../src/lib/install/cursor-bridge.js";
 
 describe("parseNameArg", () => {
   it("does not treat a following flag as --name value", () => {
@@ -16,6 +18,41 @@ describe("parseNameArg", () => {
       name: "",
       remainingArgs: ["--model", "gpt-5-codex"]
     });
+  });
+});
+
+describe("handleUtilityCommand", () => {
+  it("installs the Cursor bridge and prints the target path", () => {
+    const stdoutWrite = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation(() => true);
+    const installSpy = vi
+      .spyOn(cursorBridgeInstall, "installCursorBridge")
+      .mockReturnValue({
+        sourceDir: "/tmp/source",
+        targetDir: "/tmp/target"
+      });
+
+    expect(handleUtilityCommand(["install-cursor-bridge"])).toBe(true);
+    expect(installSpy).toHaveBeenCalled();
+    expect(stdoutWrite).toHaveBeenCalledWith("Cursor bridge 已安装到:\n  /tmp/target\n");
+
+    stdoutWrite.mockRestore();
+  });
+
+  it("prints usage for help", () => {
+    const stdoutWrite = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation(() => true);
+
+    expect(handleUtilityCommand(["--help"])).toBe(true);
+    expect(stdoutWrite).toHaveBeenCalledWith("用法:\n");
+
+    stdoutWrite.mockRestore();
+  });
+
+  it("returns false for runner commands", () => {
+    expect(handleUtilityCommand(["codex"])).toBe(false);
   });
 });
 

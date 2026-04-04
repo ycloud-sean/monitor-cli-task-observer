@@ -11,6 +11,10 @@ import { buildClaudeSettings } from "../lib/adapters/claude.js";
 import { isDirectExecution } from "../lib/bin-entry.js";
 import { ensureDaemonRunning } from "../lib/daemon.js";
 import { DaemonClient } from "../lib/http-client.js";
+import {
+  ensureCursorBridgeInstalled,
+  installCursorBridge
+} from "../lib/install/cursor-bridge.js";
 import { buildCodexCommand, detectCodexWaitState } from "../lib/adapters/codex.js";
 import { detectHostMetadata } from "../lib/host-metadata.js";
 import { buildCursorBridgeUri } from "../lib/focus/cursor-bridge.js";
@@ -109,15 +113,67 @@ function openUriDetached(uri: string): void {
   child.unref();
 }
 
+function printUsage(): void {
+  process.stdout.write("用法:\n");
+  process.stdout.write("  monitor <codex|claude> [args...]\n");
+  process.stdout.write("  monitor install-cursor-bridge\n");
+}
+
+export function handleUtilityCommand(args: string[]): boolean {
+  const [command, ...restArgs] = args;
+
+  if (command === "install-cursor-bridge") {
+    if (restArgs.length > 0) {
+      throw new Error("install-cursor-bridge does not accept extra arguments");
+    }
+
+    const { targetDir } = installCursorBridge({
+      moduleUrl: import.meta.url
+    });
+    process.stdout.write(`Cursor bridge 已安装到:\n  ${targetDir}\n`);
+    process.stdout.write("如果 Cursor 正在运行，重启一次 Cursor，确保 bridge 扩展被加载。\n");
+    return true;
+  }
+
+  if (command === "--help" || command === "-h" || command === "help") {
+    printUsage();
+    return true;
+  }
+
+  return false;
+}
+
 export async function main(): Promise<void> {
   const daemonUrl = process.env.MONITOR_DAEMON_URL ?? DEFAULT_DAEMON_URL;
   const forwardedArgs = process.argv.slice(2);
+  if (handleUtilityCommand(forwardedArgs)) {
+    return;
+  }
   const [runner, ...runnerArgs] = forwardedArgs;
 
   if (runner !== "codex" && runner !== "claude") {
+    printUsage();
     throw new Error(`unsupported runner: ${runner ?? ""}`);
   }
   const runnerType: TaskRecord["runnerType"] = runner;
+  const host = detectHostMetadata();
+
+  if (host.hostApp === "cursor") {
+    try {
+      const result = ensureCursorBridgeInstalled({
+        moduleUrl: import.meta.url
+      });
+      if (result.installed) {
+        process.stderr.write(
+          `monitor: 已自动安装 Cursor bridge 到 ${result.targetDir}，请重启一次 Cursor。\n`
+        );
+      }
+    } catch (error) {
+      process.stderr.write(
+        `monitor: 自动安装 Cursor bridge 失败，可稍后手动执行 monitor install-cursor-bridge: ${String(error)}\n`
+      );
+    }
+  }
 
   await ensureDaemonRunning({
     baseUrl: daemonUrl,
@@ -183,7 +239,6 @@ export async function main(): Promise<void> {
   child.on("spawn", () => {
     didSpawn = true;
     const startedAt = new Date().toISOString();
-    const host = detectHostMetadata();
     if (host.hostApp === "cursor") {
       openUriDetached(
         buildCursorBridgeUri("register", {

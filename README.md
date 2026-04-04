@@ -28,13 +28,38 @@ curl -fsSL https://raw.githubusercontent.com/ycloud-sean/monitor-cli-task-observ
 - 在 `~/.local/bin` 下生成 `monitor` 和 `monitord` 命令
 - 自动把 Cursor bridge 扩展复制到 `~/.cursor/extensions/liangxin.monitor-cursor-bridge-0.1.0`
 
-如果你的 shell 还没有把 `~/.local/bin` 加进 `PATH`，安装脚本会提示你补这一行：
+如果你的 shell 还没有把 `~/.local/bin` 加进 `PATH`，安装脚本会自动把下面这一行写进你的 shell 配置文件：
 
 ```bash
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-### 3. 开发态构建
+是否需要手动 `source ~/.zshrc`，取决于安装输出：
+
+- 如果输出 `当前终端的 PATH 已包含 /Users/<you>/.local/bin`，不需要再 `source`
+- 如果输出 `已自动写入 PATH 到: ~/.zshrc`，当前终端需要执行一次 `source ~/.zshrc`，或者直接开一个新终端
+
+### 3. Homebrew 安装
+
+如果你更希望走 Homebrew，建议发布到你自己的 tap 后，对外使用这一条命令：
+
+```bash
+brew install ycloud-sean/monitor/monitor
+```
+
+在 tap 还没建好之前，本仓库内用于验证的 formula 仍然在：
+
+```bash
+Formula/monitor.rb
+```
+
+说明：
+
+- Homebrew 会把 `monitor` 和 `monitord` 放进自己的 `bin`，所以正常情况下不需要再手动 `source ~/.zshrc`
+- 如果用户是在 Cursor 里第一次执行 `monitor codex` 或 `monitor claude`，`monitor` 会自动补装 Cursor bridge
+- 如果补装发生时 Cursor 已经在运行，需要重启一次 Cursor，确保 bridge 被加载
+
+### 4. 开发态构建
 
 如果你是在仓库里本地开发，而不是从 GitHub 安装，再执行：
 
@@ -43,9 +68,23 @@ npm install
 npm run build:installable
 ```
 
-### 4. 安装 Cursor bridge 扩展
+### 5. 安装 Cursor bridge 扩展
 
 在线安装脚本会自动安装 Cursor bridge。
+
+如果你是通过 Homebrew 安装，通常不需要手动执行任何命令。第一次在 Cursor 里运行：
+
+```bash
+monitor codex
+```
+
+程序会自动补装 Cursor bridge。
+
+如果你希望手动补装，也可以执行：
+
+```bash
+monitor install-cursor-bridge
+```
 
 如果你是在开发态手动安装，直接用本地扩展目录复制：
 
@@ -56,7 +95,7 @@ cp -R apps/monitor-cursor-extension \
 
 安装后把 Cursor 重启一次，确保扩展被加载。
 
-### 5. 启动监控任务
+### 6. 启动监控任务
 
 安装完成后，直接执行：
 
@@ -78,7 +117,7 @@ monitor claude
 node apps/monitor-cli/dist/bin/monitord.js
 ```
 
-### 6. 上线验收
+### 7. 上线验收
 
 - 在 Cursor 终端里启动一个新任务：`monitor codex`
 - 等它进入 `waiting_input` 或 `waiting_approval`
