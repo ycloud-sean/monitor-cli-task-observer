@@ -2,6 +2,7 @@
 set -euo pipefail
 
 REPO_URL="${MONITOR_REPO_URL:-https://github.com/ycloud-sean/monitor-cli-task-observer.git}"
+SSH_REPO_URL="${MONITOR_REPO_SSH_URL:-git@github.com:ycloud-sean/monitor-cli-task-observer.git}"
 INSTALL_REF="${MONITOR_INSTALL_REF:-main}"
 INSTALL_ROOT="${MONITOR_INSTALL_ROOT:-$HOME/.monitor/monitor-cli-task-observer}"
 BIN_DIR="${MONITOR_BIN_DIR:-$HOME/.local/bin}"
@@ -67,6 +68,45 @@ ensure_path_in_shell_rc() {
   return 0
 }
 
+update_existing_install() {
+  local current_origin
+  current_origin="$(git -C "$INSTALL_ROOT" remote get-url origin 2>/dev/null || true)"
+
+  if git -C "$INSTALL_ROOT" fetch --depth=1 origin "$INSTALL_REF"; then
+    git -C "$INSTALL_ROOT" checkout --force FETCH_HEAD
+    return 0
+  fi
+
+  if [[ "$current_origin" != "$SSH_REPO_URL" ]]; then
+    printf '默认远程更新失败，尝试切换到 SSH...\n'
+    git -C "$INSTALL_ROOT" remote set-url origin "$SSH_REPO_URL"
+    if git -C "$INSTALL_ROOT" fetch --depth=1 origin "$INSTALL_REF"; then
+      git -C "$INSTALL_ROOT" checkout --force FETCH_HEAD
+      return 0
+    fi
+  fi
+
+  if [[ "$current_origin" != "$REPO_URL" ]]; then
+    git -C "$INSTALL_ROOT" remote set-url origin "$REPO_URL"
+  fi
+
+  return 1
+}
+
+clone_install_repo() {
+  if git clone --depth=1 --branch "$INSTALL_REF" "$REPO_URL" "$INSTALL_ROOT"; then
+    return 0
+  fi
+
+  if [[ "$REPO_URL" != "$SSH_REPO_URL" ]]; then
+    printf '默认克隆失败，尝试使用 SSH...\n'
+    git clone --depth=1 --branch "$INSTALL_REF" "$SSH_REPO_URL" "$INSTALL_ROOT"
+    return 0
+  fi
+
+  return 1
+}
+
 if [[ "$(uname -s)" != "Darwin" ]]; then
   printf '当前安装脚本只支持 macOS。\n' >&2
   exit 1
@@ -82,8 +122,7 @@ mkdir -p "$(dirname "$INSTALL_ROOT")"
 
 if [[ -d "$INSTALL_ROOT/.git" ]]; then
   printf '更新安装目录: %s\n' "$INSTALL_ROOT"
-  git -C "$INSTALL_ROOT" fetch --depth=1 origin "$INSTALL_REF"
-  git -C "$INSTALL_ROOT" checkout --force FETCH_HEAD
+  update_existing_install
 else
   if [[ -e "$INSTALL_ROOT" ]]; then
     printf '安装目录已存在且不是 git 仓库: %s\n' "$INSTALL_ROOT" >&2
@@ -91,7 +130,7 @@ else
   fi
 
   printf '克隆仓库到: %s\n' "$INSTALL_ROOT"
-  git clone --depth=1 --branch "$INSTALL_REF" "$REPO_URL" "$INSTALL_ROOT"
+  clone_install_repo
 fi
 
 printf '安装依赖并构建 CLI...\n'
