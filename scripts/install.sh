@@ -8,6 +8,7 @@ BIN_DIR="${MONITOR_BIN_DIR:-$HOME/.local/bin}"
 CURSOR_EXTENSIONS_DIR="${MONITOR_CURSOR_EXTENSIONS_DIR:-$HOME/.cursor/extensions}"
 CURSOR_EXTENSION_ID="liangxin.monitor-cursor-bridge-0.1.0"
 CURSOR_EXTENSION_DIR="$CURSOR_EXTENSIONS_DIR/$CURSOR_EXTENSION_ID"
+PATH_EXPORT_LINE='export PATH="$HOME/.local/bin:$PATH"'
 
 require_command() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -26,6 +27,44 @@ set -euo pipefail
 exec node "$entry_path" "\$@"
 EOF
   chmod +x "$target_path"
+}
+
+detect_shell_rc_file() {
+  local shell_name
+  shell_name="$(basename "${SHELL:-}")"
+
+  case "$shell_name" in
+    zsh)
+      printf '%s\n' "$HOME/.zshrc"
+      ;;
+    bash)
+      if [[ -f "$HOME/.bash_profile" || ! -f "$HOME/.bashrc" ]]; then
+        printf '%s\n' "$HOME/.bash_profile"
+      else
+        printf '%s\n' "$HOME/.bashrc"
+      fi
+      ;;
+    *)
+      printf '%s\n' ""
+      ;;
+  esac
+}
+
+ensure_path_in_shell_rc() {
+  local rc_file="$1"
+
+  if [[ -z "$rc_file" ]]; then
+    return 1
+  fi
+
+  mkdir -p "$(dirname "$rc_file")"
+  touch "$rc_file"
+
+  if ! grep -Fqx "$PATH_EXPORT_LINE" "$rc_file"; then
+    printf '\n# Added by monitor installer\n%s\n' "$PATH_EXPORT_LINE" >>"$rc_file"
+  fi
+
+  return 0
 }
 
 if [[ "$(uname -s)" != "Darwin" ]]; then
@@ -72,6 +111,12 @@ if [[ -d "$CURSOR_EXTENSION_DIR" ]]; then
 fi
 cp -R "$INSTALL_ROOT/apps/monitor-cursor-extension" "$CURSOR_EXTENSION_DIR"
 
+RC_FILE="$(detect_shell_rc_file)"
+PATH_WRITTEN="false"
+if ensure_path_in_shell_rc "$RC_FILE"; then
+  PATH_WRITTEN="true"
+fi
+
 printf '\n安装完成。\n'
 printf '命令入口:\n'
 printf '  %s/monitor\n' "$BIN_DIR"
@@ -80,8 +125,19 @@ printf 'Cursor bridge 已安装到:\n'
 printf '  %s\n' "$CURSOR_EXTENSION_DIR"
 
 if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
-  printf '\n请把下面这行加入你的 shell 配置文件后重新打开终端:\n'
-  printf '  export PATH="%s:$PATH"\n' "$BIN_DIR"
+  if [[ "$PATH_WRITTEN" == "true" ]]; then
+    printf '\n已自动写入 PATH 到: %s\n' "$RC_FILE"
+    printf '当前终端不会被安装脚本直接改写；请执行下面任一命令刷新当前 shell:\n'
+    if [[ -n "$RC_FILE" ]]; then
+      printf '  source %s\n' "$RC_FILE"
+    fi
+    printf '  exec %s -l\n' "${SHELL:-/bin/zsh}"
+  else
+    printf '\n无法自动判断你的 shell 配置文件，请手动加入:\n'
+    printf '  %s\n' "$PATH_EXPORT_LINE"
+  fi
+else
+  printf '\n当前终端的 PATH 已包含 %s\n' "$BIN_DIR"
 fi
 
 printf '\n之后直接执行:\n'
