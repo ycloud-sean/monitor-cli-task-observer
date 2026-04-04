@@ -4,6 +4,7 @@ set -euo pipefail
 REPO_URL="${MONITOR_REPO_URL:-https://github.com/ycloud-sean/monitor-cli-task-observer.git}"
 SSH_REPO_URL="${MONITOR_REPO_SSH_URL:-git@github.com:ycloud-sean/monitor-cli-task-observer.git}"
 INSTALL_REF="${MONITOR_INSTALL_REF:-main}"
+ARCHIVE_URL="${MONITOR_ARCHIVE_URL:-https://codeload.github.com/ycloud-sean/monitor-cli-task-observer/tar.gz/refs/heads/$INSTALL_REF}"
 INSTALL_ROOT="${MONITOR_INSTALL_ROOT:-$HOME/.monitor/monitor-cli-task-observer}"
 BIN_DIR="${MONITOR_BIN_DIR:-$HOME/.local/bin}"
 CURSOR_EXTENSIONS_DIR="${MONITOR_CURSOR_EXTENSIONS_DIR:-$HOME/.cursor/extensions}"
@@ -107,6 +108,33 @@ clone_install_repo() {
   return 1
 }
 
+install_from_archive() {
+  local temp_dir archive_path extracted_root extracted_dir
+  temp_dir="$(mktemp -d "${TMPDIR:-/tmp}/monitor-install.XXXXXX")"
+  archive_path="$temp_dir/repo.tar.gz"
+  extracted_root="$temp_dir/extracted"
+
+  cleanup() {
+    rm -rf "$temp_dir"
+  }
+  trap cleanup RETURN
+
+  mkdir -p "$extracted_root"
+  printf 'git 更新失败，回退到归档包安装...\n'
+  curl -fsSL "$ARCHIVE_URL" -o "$archive_path"
+  tar -xzf "$archive_path" -C "$extracted_root"
+
+  extracted_dir="$(find "$extracted_root" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+  if [[ -z "$extracted_dir" ]]; then
+    printf '归档包解压失败，未找到源码目录。\n' >&2
+    exit 1
+  fi
+
+  rm -rf "$INSTALL_ROOT"
+  mkdir -p "$(dirname "$INSTALL_ROOT")"
+  mv "$extracted_dir" "$INSTALL_ROOT"
+}
+
 if [[ "$(uname -s)" != "Darwin" ]]; then
   printf '当前安装脚本只支持 macOS。\n' >&2
   exit 1
@@ -122,15 +150,19 @@ mkdir -p "$(dirname "$INSTALL_ROOT")"
 
 if [[ -d "$INSTALL_ROOT/.git" ]]; then
   printf '更新安装目录: %s\n' "$INSTALL_ROOT"
-  update_existing_install
+  if ! update_existing_install; then
+    install_from_archive
+  fi
 else
   if [[ -e "$INSTALL_ROOT" ]]; then
-    printf '安装目录已存在且不是 git 仓库: %s\n' "$INSTALL_ROOT" >&2
-    exit 1
+    printf '安装目录已存在但不是 git 仓库，改为归档包更新: %s\n' "$INSTALL_ROOT"
+    install_from_archive
+  else
+    printf '克隆仓库到: %s\n' "$INSTALL_ROOT"
+    if ! clone_install_repo; then
+      install_from_archive
+    fi
   fi
-
-  printf '克隆仓库到: %s\n' "$INSTALL_ROOT"
-  clone_install_repo
 fi
 
 printf '安装依赖并构建 CLI...\n'
