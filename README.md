@@ -44,10 +44,10 @@ export PATH="$HOME/.local/bin:$PATH"
 如果你更希望走 Homebrew，对外建议直接使用这一条命令：
 
 ```bash
-HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_FROM_API=1 brew install ycloud-sean/monitor/monitor
+HOMEBREW_NO_AUTO_UPDATE=1 brew install ycloud-sean/monitor/monitor
 ```
 
-如果你不介意 Homebrew 自己先做自动更新和 API 拉取，也可以去掉前面的两个环境变量。
+如果你不介意 Homebrew 自己先做自动更新，也可以去掉前面的 `HOMEBREW_NO_AUTO_UPDATE=1`。
 
 本仓库内用于验证的 formula 仍然在：
 
@@ -59,7 +59,7 @@ Formula/monitor.rb
 
 - 这个 Homebrew 包安装的是预构建运行包，不会在用户机器上再执行一次 `npm install + tsc`
 - `HOMEBREW_NO_AUTO_UPDATE=1` 用来避免长时间卡在 `==> Auto-updating Homebrew...`
-- `HOMEBREW_NO_INSTALL_FROM_API=1` 用来避免 Homebrew 5 先去拉 `formulae.brew.sh` 的 API 元数据
+- 不建议额外加 `HOMEBREW_NO_INSTALL_FROM_API=1`；在 Homebrew 5 下，它可能触发 `homebrew/core` 的首次 clone，反而更慢
 - 当前 Homebrew 分发方案只支持 `macOS arm64`
 - 运行包内已经内置 Node 22，不再依赖用户本机额外安装 `node@22`
 - Homebrew 会把 `monitor` 和 `monitord` 放进自己的 `bin`，所以正常情况下不需要再手动 `source ~/.zshrc`
