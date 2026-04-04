@@ -4,3 +4,4 @@ dist
 apps/monitor-app/src-tauri/target
 apps/monitor-app/dist
 apps/monitor-cli/.monitor-data
+.superpowers

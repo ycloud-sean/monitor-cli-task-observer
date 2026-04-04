@@ -1,14 +1,19 @@
+#!/usr/bin/env node
+
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { constants as osConstants, tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join } from "node:path";
 import type { TaskEvent, TaskRecord } from "@monitor/contracts";
 import { buildClaudeSettings } from "../lib/adapters/claude.js";
+import { isDirectExecution } from "../lib/bin-entry.js";
 import { DaemonClient } from "../lib/http-client.js";
 import { buildCodexCommand, detectCodexWaitState } from "../lib/adapters/codex.js";
 import { detectHostMetadata } from "../lib/host-metadata.js";
+import { buildCursorBridgeUri } from "../lib/focus/cursor-bridge.js";
+import { wrapCommandWithPty } from "../lib/pty.js";
 
 const DEFAULT_DAEMON_URL = "http://127.0.0.1:45731";
 
@@ -95,6 +100,14 @@ export function createEventQueue(
   return { enqueue, drain: () => eventQueue };
 }
 
+function openUriDetached(uri: string): void {
+  const child = spawn("open", [uri], {
+    detached: true,
+    stdio: "ignore"
+  });
+  child.unref();
+}
+
 export async function main(): Promise<void> {
   const daemonUrl = process.env.MONITOR_DAEMON_URL ?? DEFAULT_DAEMON_URL;
   const forwardedArgs = process.argv.slice(2);
@@ -137,7 +150,9 @@ export async function main(): Promise<void> {
     ];
   }
 
-  const child = spawn(command[0], command.slice(1), {
+  const spawnCommand = wrapCommandWithPty(command);
+
+  const child = spawn(spawnCommand[0], spawnCommand.slice(1), {
     stdio: ["inherit", "pipe", "pipe"]
   });
 
@@ -163,6 +178,15 @@ export async function main(): Promise<void> {
     didSpawn = true;
     const startedAt = new Date().toISOString();
     const host = detectHostMetadata();
+    if (host.hostApp === "cursor") {
+      openUriDetached(
+        buildCursorBridgeUri("register", {
+          taskId,
+          name: displayName,
+          cwd: process.cwd()
+        })
+      );
+    }
     const task: TaskRecord = {
       taskId,
       name: displayName,
@@ -227,11 +251,7 @@ export async function main(): Promise<void> {
   });
 }
 
-const isDirectExecution = process.argv[1]
-  ? fileURLToPath(import.meta.url) === resolve(process.argv[1])
-  : false;
-
-if (isDirectExecution) {
+if (isDirectExecution(fileURLToPath(import.meta.url), process.argv[1])) {
   main().catch((error) => {
     process.stderr.write(String(error) + "\n");
     process.exit(1);

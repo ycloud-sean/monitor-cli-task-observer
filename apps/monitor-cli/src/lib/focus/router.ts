@@ -2,7 +2,10 @@ import type { TaskRecord } from "@monitor/contracts";
 import { cursorScript } from "./cursor.js";
 import { iTermScript, terminalScript } from "./apple-script.js";
 
-type FocusTarget = Pick<TaskRecord, "hostApp" | "hostWindowRef" | "hostSessionRef">;
+type FocusTarget = Pick<
+  TaskRecord,
+  "taskId" | "hostApp" | "hostWindowRef" | "hostSessionRef" | "cwd"
+>;
 
 export function buildFocusScript(task: FocusTarget): string {
   if (task.hostApp === "terminal") {
@@ -14,7 +17,7 @@ export function buildFocusScript(task: FocusTarget): string {
   }
 
   if (task.hostApp === "cursor") {
-    return cursorScript();
+    return cursorScript(task.hostWindowRef, task.cwd, task.taskId);
   }
 
   throw new Error(`unsupported host app: ${task.hostApp}`);

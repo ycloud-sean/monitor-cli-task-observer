@@ -1,9 +1,8 @@
-import { cp, mkdtemp, rm } from "node:fs/promises";
 import { spawn } from "node:child_process";
-import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
 import type { TaskRecord } from "@monitor/contracts";
+import { buildFocusScript } from "./focus/router.js";
 
 function shouldNotify(status: TaskRecord["status"]): boolean {
   return (
@@ -14,10 +13,16 @@ function shouldNotify(status: TaskRecord["status"]): boolean {
   );
 }
 
-function resolveBundledNotifierAppDir(): string {
+function resolveBundledNotifierBinaryPath(): string {
   const require = createRequire(import.meta.url);
   const notifierPackageDir = dirname(require.resolve("terminal-notifier"));
-  return join(notifierPackageDir, "terminal-notifier.app");
+  return join(
+    notifierPackageDir,
+    "terminal-notifier.app",
+    "Contents",
+    "MacOS",
+    "terminal-notifier"
+  );
 }
 
 export function isNotificationSupported(
@@ -54,43 +59,103 @@ function buildMessage(task: TaskRecord): string {
   return `${task.name} needs input`;
 }
 
+function quoteAppleScriptString(value: string): string {
+  return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+}
+
+function isWaitingTask(task: TaskRecord): boolean {
+  return task.status === "waiting_input" || task.status === "waiting_approval";
+}
+
+function buildDialogTitle(task: TaskRecord): string {
+  if (task.status === "waiting_approval") {
+    return "Monitor 等待审批";
+  }
+
+  return "Monitor 等待输入";
+}
+
+function buildDialogMessage(task: TaskRecord): string {
+  if (task.status === "waiting_approval") {
+    return `任务“${task.name}”正在等待你审批。`;
+  }
+
+  return `任务“${task.name}”正在等待你输入。`;
+}
+
+function buildDialogScript(task: TaskRecord): string {
+  const focusScript =
+    task.hostApp === "unknown"
+      ? ""
+      : `
+if button returned of dialogResult is "打开任务" then
+${buildFocusScript(task)}
+end if`;
+
+  return `
+tell application "System Events"
+  activate
+  set dialogResult to display dialog ${quoteAppleScriptString(buildDialogMessage(task))} with title ${quoteAppleScriptString(buildDialogTitle(task))} buttons {"忽略", "打开任务"} default button "打开任务"
+end tell
+${focusScript}
+`.trim();
+}
+
+async function spawnDetached(
+  command: string,
+  args: string[],
+  options: { detached?: boolean; stdio?: "ignore" } = {
+    detached: true,
+    stdio: "ignore"
+  }
+): Promise<void> {
+  const child = spawn(command, args, {
+    detached: options.detached ?? true,
+    stdio: options.stdio ?? "ignore"
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    let settled = false;
+
+    const resolveOnSpawn = () => {
+      if (settled) return;
+      settled = true;
+      child.off("error", rejectOnError);
+      resolve();
+    };
+
+    const rejectOnError = (error: Error) => {
+      if (settled) return;
+      settled = true;
+      child.off("spawn", resolveOnSpawn);
+      reject(error);
+    };
+
+    child.once("spawn", resolveOnSpawn);
+    child.once("error", rejectOnError);
+  });
+
+  child.unref();
+}
+
 export async function notifyTask(task: TaskRecord): Promise<void> {
   if (!shouldNotifyTaskUpdate(undefined, task)) {
     return;
   }
 
-  const bundledNotifierAppDir = resolveBundledNotifierAppDir();
-  const tempAppDir = await mkdtemp(join(tmpdir(), "monitor-terminal-notifier-"));
-
-  try {
-    const copiedAppDir = `${tempAppDir}.app`;
-    await cp(bundledNotifierAppDir, copiedAppDir, { recursive: true });
-
-    await new Promise<void>((resolve, reject) => {
-      const child = spawn(join(copiedAppDir, "Contents", "MacOS", "terminal-notifier"), [
-        "-title",
-        "Monitor",
-        "-message",
-        buildMessage(task),
-        "-group",
-        task.taskId,
-        "-open",
-        `monitor://task/${task.taskId}`
-      ]);
-
-      child.on("error", reject);
-      child.on("exit", (code) => {
-        if (code === 0) {
-          resolve();
-          return;
-        }
-        reject(new Error(`terminal-notifier exited with code ${String(code)}`));
-      });
-    });
-  } finally {
-    await rm(tempAppDir, { recursive: true, force: true }).catch(() => undefined);
-    await rm(`${tempAppDir}.app`, { recursive: true, force: true }).catch(
-      () => undefined
-    );
+  if (isWaitingTask(task)) {
+    await spawnDetached("osascript", ["-e", buildDialogScript(task)]);
+    return;
   }
+
+  await spawnDetached(resolveBundledNotifierBinaryPath(), [
+    "-title",
+    "Monitor",
+    "-message",
+    buildMessage(task),
+    "-group",
+    task.taskId,
+    "-open",
+    `monitor://task/${task.taskId}`
+  ]);
 }

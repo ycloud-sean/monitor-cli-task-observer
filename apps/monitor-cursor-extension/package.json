@@ -1,0 +1,23 @@
+{
+  "name": "monitor-cursor-bridge",
+  "displayName": "Monitor Cursor Bridge",
+  "description": "Focus Monitor tasks back into the exact Cursor terminal.",
+  "version": "0.1.0",
+  "publisher": "liangxin",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onUri"
+  ],
+  "main": "./extension.js",
+  "scripts": {
+    "build": "node --check extension.js && node --check lib/registry.js && node --check lib/uri.js",
+    "test": "node --test test/*.test.js",
+    "lint": "npm run build"
+  }
+}

@@ -1,5 +1,8 @@
+#!/usr/bin/env node
+
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isDirectExecution } from "../lib/bin-entry.js";
 import { DaemonClient } from "../lib/http-client.js";
 import { translateClaudeHook } from "../lib/adapters/claude.js";
 import { translateCodexNotify } from "../lib/adapters/codex.js";
@@ -73,11 +76,7 @@ export async function main(): Promise<void> {
   }
 }
 
-const isDirectExecution = process.argv[1]
-  ? fileURLToPath(import.meta.url) === resolve(process.argv[1])
-  : false;
-
-if (isDirectExecution) {
+if (isDirectExecution(fileURLToPath(import.meta.url), process.argv[1])) {
   main().catch((error) => {
     process.stderr.write(String(error) + "\n");
     process.exit(1);

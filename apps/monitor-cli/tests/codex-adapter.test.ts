@@ -21,7 +21,7 @@ describe("buildCodexCommand", () => {
 });
 
 describe("translateCodexNotify", () => {
-  it("maps agent-turn-complete into task.finished", () => {
+  it("maps agent-turn-complete into task.waiting_input", () => {
     const event = translateCodexNotify("task-1", {
       type: "agent-turn-complete",
       "turn-id": "123",
@@ -31,7 +31,7 @@ describe("translateCodexNotify", () => {
 
     expect(event).not.toBeNull();
     if (!event) throw new Error("expected event");
-    expect(event.type).toBe("task.finished");
+    expect(event.type).toBe("task.waiting_input");
   });
 
   it("returns null for unknown payloads to avoid duplicate output", () => {

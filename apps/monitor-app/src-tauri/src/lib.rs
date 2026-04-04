@@ -6,18 +6,22 @@ fn ensure_main_window(app: &AppHandle) -> tauri::Result<WebviewWindow> {
         return Ok(window);
     }
 
-    WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
+    let window = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
         .title("Monitor")
         .inner_size(380.0, 560.0)
         .visible(false)
         .resizable(false)
-        .on_window_event(|window, event| {
-            if let WindowEvent::CloseRequested { api, .. } = event {
-                api.prevent_close();
-                let _ = window.hide();
-            }
-        })
-        .build()
+        .build()?;
+
+    let window_for_events = window.clone();
+    window.on_window_event(move |event| {
+        if let WindowEvent::CloseRequested { api, .. } = event {
+            api.prevent_close();
+            let _ = window_for_events.hide();
+        }
+    });
+
+    Ok(window)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

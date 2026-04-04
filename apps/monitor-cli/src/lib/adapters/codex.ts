@@ -22,7 +22,7 @@ export function translateCodexNotify(
 ): TaskEvent | null {
   if (payload.type === "agent-turn-complete") {
     return {
-      type: "task.finished",
+      type: "task.waiting_input",
       taskId,
       at: new Date().toISOString()
     };
