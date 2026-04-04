@@ -90,10 +90,6 @@ cp -R \
   "$ROOT_DIR/node_modules/terminal-notifier/terminal-notifier.app" \
   "$STAGE_DIR/node_modules/terminal-notifier/"
 
-mkdir -p "$STAGE_DIR/runtime/bin"
-cp "$NODE_BIN_PATH" "$STAGE_DIR/runtime/bin/node"
-chmod +x "$STAGE_DIR/runtime/bin/node"
-
 mkdir -p "$OUT_DIR"
 ARCHIVE_PATH="$OUT_DIR/monitor-runtime-$BUNDLE_VERSION-macos-arm64.tar.gz"
 rm -f "$ARCHIVE_PATH"
@@ -101,6 +97,8 @@ tar -czf "$ARCHIVE_PATH" -C "$OUT_DIR" "monitor-runtime-$BUNDLE_VERSION"
 
 printf '运行时打包完成:\n'
 printf '  %s\n' "$ARCHIVE_PATH"
-printf '内置 Node:\n'
+printf '构建时 Node:\n'
 printf '  %s\n' "$NODE_BIN_PATH"
+printf '运行时要求:\n'
+printf '  Node.js 22.x 在 PATH 中\n'
 shasum -a 256 "$ARCHIVE_PATH"
