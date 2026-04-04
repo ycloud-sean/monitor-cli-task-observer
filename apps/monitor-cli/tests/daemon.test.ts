@@ -45,6 +45,7 @@ describe("daemon helpers", () => {
       .fn()
       .mockRejectedValueOnce(new Error("down"))
       .mockResolvedValueOnce({ ok: false } as Response)
+      .mockResolvedValueOnce({ ok: false } as Response)
       .mockResolvedValueOnce({ ok: true } as Response);
     const sleepImpl = vi.fn(async () => undefined);
 
@@ -57,8 +58,24 @@ describe("daemon helpers", () => {
       })
     ).resolves.toBe(true);
 
-    expect(fetchImpl).toHaveBeenCalledTimes(3);
-    expect(sleepImpl).toHaveBeenCalledTimes(2);
+    expect(fetchImpl).toHaveBeenCalledTimes(4);
+    expect(sleepImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("accepts a legacy daemon that exposes /tasks but not /health", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false } as Response)
+      .mockResolvedValueOnce({ ok: true } as Response);
+
+    await expect(
+      waitForDaemonHealthy("http://127.0.0.1:45731", {
+        attempts: 1,
+        fetchImpl: fetchImpl as unknown as (input: string) => Promise<{ ok: boolean }>
+      })
+    ).resolves.toBe(true);
+
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
   it("does not spawn a daemon when one is already healthy", async () => {

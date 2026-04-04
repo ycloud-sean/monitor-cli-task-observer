@@ -53,6 +53,10 @@ export function buildDaemonHealthUrl(baseUrl: string): string {
   return new URL("/health", baseUrl).toString();
 }
 
+function buildDaemonTasksUrl(baseUrl: string): string {
+  return new URL("/tasks", baseUrl).toString();
+}
+
 export function parseLocalDaemonUrl(baseUrl: string): { host: string; port: number } | null {
   try {
     const url = new URL(baseUrl);
@@ -83,8 +87,17 @@ export async function isDaemonHealthy(
   fetchImpl: FetchLike = fetch as FetchLike
 ): Promise<boolean> {
   try {
-    const response = await fetchImpl(buildDaemonHealthUrl(baseUrl));
-    return response.ok;
+    const healthResponse = await fetchImpl(buildDaemonHealthUrl(baseUrl));
+    if (healthResponse.ok) {
+      return true;
+    }
+  } catch {
+    // Fall through to the legacy probe.
+  }
+
+  try {
+    const tasksResponse = await fetchImpl(buildDaemonTasksUrl(baseUrl));
+    return tasksResponse.ok;
   } catch {
     return false;
   }
