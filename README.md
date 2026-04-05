@@ -37,11 +37,22 @@ HOMEBREW_NO_AUTO_UPDATE=1 brew upgrade ycloud-sean/monitor/monitor
 brew uninstall monitor
 ```
 
-如果还想把本地任务数据和 Cursor bridge 一并清掉，再额外执行：
+完全卸载：
 
 ```bash
+pkill -f 'monitord.js' || true
+brew uninstall monitor
+brew untap ycloud-sean/monitor
 rm -rf ~/.monitor-data
+rm -rf ~/.monitor/monitor-cli-task-observer
+rm -f ~/.local/bin/monitor ~/.local/bin/monitord
 rm -rf ~/.cursor/extensions/liangxin.monitor-cursor-bridge-0.1.0
+```
+
+如果你确认 `~/.local/bin` 这一行只是 `monitor` 安装脚本加的，也可以再手动从 `~/.zshrc`、`~/.bashrc` 或 `~/.bash_profile` 里删掉：
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
 ```
 
 说明：
@@ -95,6 +106,18 @@ source ~/.zshrc
 卸载：
 
 ```bash
+rm -f ~/.local/bin/monitor ~/.local/bin/monitord
+rm -rf ~/.monitor/monitor-cli-task-observer
+rm -rf ~/.monitor-data
+rm -rf ~/.cursor/extensions/liangxin.monitor-cursor-bridge-0.1.0
+```
+
+完全卸载：
+
+```bash
+pkill -f 'monitord.js' || true
+brew uninstall monitor 2>/dev/null || true
+brew untap ycloud-sean/monitor 2>/dev/null || true
 rm -f ~/.local/bin/monitor ~/.local/bin/monitord
 rm -rf ~/.monitor/monitor-cli-task-observer
 rm -rf ~/.monitor-data
