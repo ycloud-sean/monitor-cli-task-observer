@@ -2,21 +2,62 @@
 
 macOS 上给 `codex` / `claude` CLI 做任务监控、等待输入提醒、点击回跳和 Cursor 精确终端聚焦的一套本地方案。
 
-## 如何发布上线
+## 安装与升级
 
-当前仓库的“上线”方式是本机部署，不是发布到 npm registry 或 Cursor Marketplace。也就是说，当前最稳的交付方式是：从 GitHub 一键安装 CLI 和 Cursor bridge，之后日常使用只需要执行 `monitor codex` 或 `monitor claude`，本地 daemon 会按需自动拉起。
+当前项目提供两种安装方式：
+
+- 推荐：Homebrew，适合大多数用户
+- 备选：`curl` 安装脚本，适合不想用 Homebrew、或者希望直接在本地拉源码构建的人
 
 ### 1. 环境要求
 
-- macOS
-- Node.js
-- 如果走 Homebrew 安装，当前要求 `Node.js 22.x` 已经在 `PATH` 中
+- `macOS arm64`
 - 已安装 `codex` 或 `claude`
 - 如果要支持 Cursor 精确跳回终端，需要安装 Cursor
+- 如果走 Homebrew 安装，要求 `node` 已在 `PATH` 中，且版本为 `Node.js 22.x`
+- 如果走 `curl` 安装，要求本机已有 `git`、`node`、`npm`；建议同样使用 `Node.js 22.x`
 
-### 2. 在线安装
+### 2. 推荐：Homebrew 安装
 
-直接执行：
+安装：
+
+```bash
+HOMEBREW_NO_AUTO_UPDATE=1 brew install ycloud-sean/monitor/monitor
+```
+
+升级：
+
+```bash
+HOMEBREW_NO_AUTO_UPDATE=1 brew upgrade ycloud-sean/monitor/monitor
+```
+
+卸载：
+
+```bash
+brew uninstall monitor
+```
+
+如果还想把本地任务数据和 Cursor bridge 一并清掉，再额外执行：
+
+```bash
+rm -rf ~/.monitor-data
+rm -rf ~/.cursor/extensions/liangxin.monitor-cursor-bridge-0.1.0
+```
+
+说明：
+
+- Homebrew 包安装的是预构建运行包，不会在用户机器上再执行一次 `npm install + tsc`
+- `HOMEBREW_NO_AUTO_UPDATE=1` 用来避免长时间卡在 `==> Auto-updating Homebrew...`
+- 不建议额外加 `HOMEBREW_NO_INSTALL_FROM_API=1`；在 Homebrew 5 下，它可能触发 `homebrew/core` 的首次 clone，反而更慢
+- 当前 Homebrew 分发方案只支持 `macOS arm64`
+- Homebrew 包会直接复用用户本机的 `node`
+- 当前为了兼容 `better-sqlite3`，运行时要求 `Node.js 22.x`，不建议使用 `23+`
+- Homebrew 会把 `monitor` 和 `monitord` 放进自己的 `bin`，正常情况下不需要再手动 `source ~/.zshrc`
+- 如果你之前装过旧的 `curl` 版本，`monitor 1.0.6+` 在第一次运行时会自动替换掉旧 daemon，不需要手动清理后台进程
+
+### 3. 备选：curl 安装脚本
+
+安装或升级都使用同一条命令：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ycloud-sean/monitor-cli-task-observer/main/scripts/install.sh | bash
@@ -28,47 +69,44 @@ curl -fsSL https://raw.githubusercontent.com/ycloud-sean/monitor-cli-task-observ
 - 安装并构建 `@monitor/contracts`、`@monitor/cli`、`monitor-cursor-bridge`
 - 在 `~/.local/bin` 下生成 `monitor` 和 `monitord` 命令
 - 自动把 Cursor bridge 扩展复制到 `~/.cursor/extensions/liangxin.monitor-cursor-bridge-0.1.0`
+- 如果 shell 配置文件里还没有 `export PATH="$HOME/.local/bin:$PATH"`，会自动追加一次；重复安装不会重复追加
 
-如果你的 shell 还没有把 `~/.local/bin` 加进 `PATH`，安装脚本会自动把下面这一行写进你的 shell 配置文件：
+如果你的 shell 还没有把 `~/.local/bin` 加进当前终端的 `PATH`，安装脚本会提示你执行：
+
+```bash
+source ~/.zshrc
+```
+
+或者直接开一个新终端。
+
+卸载 `curl` 安装版：
+
+```bash
+rm -f ~/.local/bin/monitor ~/.local/bin/monitord
+rm -rf ~/.monitor/monitor-cli-task-observer
+rm -rf ~/.monitor-data
+rm -rf ~/.cursor/extensions/liangxin.monitor-cursor-bridge-0.1.0
+```
+
+如果你确认 `~/.local/bin` 这一行只是 `monitor` 安装脚本加的，也可以再手动从 `~/.zshrc`、`~/.bashrc` 或 `~/.bash_profile` 里删掉：
 
 ```bash
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-是否需要手动 `source ~/.zshrc`，取决于安装输出：
+### 4. Cursor bridge
 
-- 如果输出 `当前终端的 PATH 已包含 /Users/<you>/.local/bin`，不需要再 `source`
-- 如果输出 `已自动写入 PATH 到: ~/.zshrc`，当前终端需要执行一次 `source ~/.zshrc`，或者直接开一个新终端
-
-### 3. Homebrew 安装
-
-如果你更希望走 Homebrew，对外建议直接使用这一条命令：
+- Homebrew 安装：第一次在 Cursor 里执行 `monitor codex` 或 `monitor claude` 时，`monitor` 会自动补装 Cursor bridge
+- `curl` 安装：安装脚本会直接安装 Cursor bridge
+- 两种方式都可以手动重装：
 
 ```bash
-HOMEBREW_NO_AUTO_UPDATE=1 brew install ycloud-sean/monitor/monitor
+monitor install-cursor-bridge
 ```
 
-如果你不介意 Homebrew 自己先做自动更新，也可以去掉前面的 `HOMEBREW_NO_AUTO_UPDATE=1`。
+如果补装或重装时 Cursor 已经在运行，重启一次 Cursor，确保 bridge 被加载。
 
-本仓库内用于验证的 formula 仍然在：
-
-```bash
-Formula/monitor.rb
-```
-
-说明：
-
-- 这个 Homebrew 包安装的是预构建运行包，不会在用户机器上再执行一次 `npm install + tsc`
-- `HOMEBREW_NO_AUTO_UPDATE=1` 用来避免长时间卡在 `==> Auto-updating Homebrew...`
-- 不建议额外加 `HOMEBREW_NO_INSTALL_FROM_API=1`；在 Homebrew 5 下，它可能触发 `homebrew/core` 的首次 clone，反而更慢
-- 当前 Homebrew 分发方案只支持 `macOS arm64`
-- Homebrew 包会直接复用用户本机的 `node`
-- 当前为了兼容 `better-sqlite3`，运行时要求 `Node.js 22.x`，不建议使用 `23+`
-- Homebrew 会把 `monitor` 和 `monitord` 放进自己的 `bin`，所以正常情况下不需要再手动 `source ~/.zshrc`
-- 如果用户是在 Cursor 里第一次执行 `monitor codex` 或 `monitor claude`，`monitor` 会自动补装 Cursor bridge
-- 如果补装发生时 Cursor 已经在运行，需要重启一次 Cursor，确保 bridge 被加载
-
-### 4. 开发态构建
+### 5. 开发态构建
 
 如果你是在仓库里本地开发，而不是从 GitHub 安装，再执行：
 
@@ -77,25 +115,7 @@ npm install
 npm run build:installable
 ```
 
-### 5. 安装 Cursor bridge 扩展
-
-在线安装脚本会自动安装 Cursor bridge。
-
-如果你是通过 Homebrew 安装，通常不需要手动执行任何命令。第一次在 Cursor 里运行：
-
-```bash
-monitor codex
-```
-
-程序会自动补装 Cursor bridge。
-
-如果你希望手动补装，也可以执行：
-
-```bash
-monitor install-cursor-bridge
-```
-
-如果你是在开发态手动安装，直接用本地扩展目录复制：
+如果你是在开发态手动安装 Cursor bridge，直接用本地扩展目录复制：
 
 ```bash
 cp -R apps/monitor-cursor-extension \
@@ -126,7 +146,7 @@ monitor claude
 node apps/monitor-cli/dist/bin/monitord.js
 ```
 
-### 7. 上线验收
+### 7. 安装后验证
 
 - 在 Cursor 终端里启动一个新任务：`monitor codex`
 - 等它进入 `waiting_input` 或 `waiting_approval`
@@ -170,8 +190,9 @@ monitor codex --name api-fix
 
 ### 额外说明
 
-- 如果要升级到最新版本，重新执行一次安装命令即可。
-- 当前还没有接 npm registry 发布，线上安装入口就是上面的 GitHub 安装脚本。
+- 安装、升级、卸载命令见上面的“安装与升级”。
+- 当前对外可用的安装入口有两种：Homebrew 和 GitHub 安装脚本。
+- 如果你是从旧 `curl` 安装切换到 Homebrew，`monitor 1.0.6+` 会自动替换旧 daemon。
 
 ### 3. 使用方式
 
