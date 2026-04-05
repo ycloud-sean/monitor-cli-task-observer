@@ -37,8 +37,9 @@ describe("notifyTask", () => {
       queueMicrotask(() => child.emit("spawn"));
       return child;
     });
+    const execFile = vi.fn();
 
-    vi.doMock("node:child_process", () => ({ spawn }));
+    vi.doMock("node:child_process", () => ({ spawn, execFile }));
 
     const { notifyTask } = await import("../src/lib/notification.js");
     const outcome = await Promise.race([
@@ -75,8 +76,9 @@ describe("notifyTask", () => {
       queueMicrotask(() => child.emit("error", new Error("boom")));
       return child;
     });
+    const execFile = vi.fn();
 
-    vi.doMock("node:child_process", () => ({ spawn }));
+    vi.doMock("node:child_process", () => ({ spawn, execFile }));
 
     const { notifyTask } = await import("../src/lib/notification.js");
 
@@ -90,8 +92,11 @@ describe("notifyTask", () => {
       queueMicrotask(() => child.emit("spawn"));
       return child;
     });
+    const execFile = vi.fn((_command: string, _args: string[], callback: Function) => {
+      queueMicrotask(() => callback(null, { stdout: "false\n", stderr: "" }));
+    });
 
-    vi.doMock("node:child_process", () => ({ spawn }));
+    vi.doMock("node:child_process", () => ({ spawn, execFile }));
 
     const { notifyTask } = await import("../src/lib/notification.js");
     await notifyTask(
@@ -149,8 +154,11 @@ describe("notifyTask", () => {
       });
       return child;
     });
+    const execFile = vi.fn((_command: string, _args: string[], callback: Function) => {
+      queueMicrotask(() => callback(null, { stdout: "false\n", stderr: "" }));
+    });
 
-    vi.doMock("node:child_process", () => ({ spawn }));
+    vi.doMock("node:child_process", () => ({ spawn, execFile }));
 
     const { notifyTask } = await import("../src/lib/notification.js");
     await notifyTask(
@@ -183,5 +191,48 @@ describe("notifyTask", () => {
     expect(osascriptArgs?.[0]).toBe("-e");
     expect(script).toContain("任务“needs-approval”正在等待你审批。");
     expect(script).toContain("Monitor 等待审批");
+  });
+
+  it("plays the sound without showing a dialog when the task is already visible in front", async () => {
+    const spawn = vi.fn(() => {
+      const child = new EventEmitter() as EventEmitter & { unref: () => void };
+      child.unref = vi.fn();
+      queueMicrotask(() => child.emit("spawn"));
+      return child;
+    });
+    const execFile = vi.fn((_command: string, _args: string[], callback: Function) => {
+      queueMicrotask(() => callback(null, { stdout: "true\n", stderr: "" }));
+    });
+
+    vi.doMock("node:child_process", () => ({ spawn, execFile }));
+
+    const { notifyTask } = await import("../src/lib/notification.js");
+    await notifyTask(
+      makeTask({
+        status: "waiting_input",
+        name: "needs-reply",
+        hostApp: "cursor",
+        hostWindowRef:
+          'cursor-window:{"title":"Cursor A — project-a","document":"file:///tmp/project-a/README.md","workspace":"project-a","x":10,"y":38,"width":1440,"height":900}',
+        hostSessionRef: null
+      })
+    );
+
+    expect(spawn).toHaveBeenCalledTimes(1);
+    expect(spawn).toHaveBeenNthCalledWith(
+      1,
+      "/usr/bin/afplay",
+      ["/System/Library/Sounds/Glass.aiff"],
+      expect.objectContaining({
+        detached: true,
+        stdio: "ignore"
+      })
+    );
+    expect(execFile).toHaveBeenCalledTimes(1);
+    expect(execFile).toHaveBeenCalledWith(
+      "osascript",
+      expect.any(Array),
+      expect.any(Function)
+    );
   });
 });

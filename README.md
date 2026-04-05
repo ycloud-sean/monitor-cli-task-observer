@@ -206,6 +206,7 @@ node apps/monitor-cli/dist/bin/monitord.js
 - 预期结果：
   - 正确的 Cursor 窗口被拉到前台
   - 正确的终端 session 被直接显示并获得焦点
+  - 如果任务对应窗口本来就已经在前台，monitor 只会播放提示音，不再重复弹等待弹窗
 
 ## 如何安装使用
 

@@ -1,29 +1,8 @@
 import { buildCursorBridgeUri } from "./cursor-bridge.js";
+import { parseCursorWindowRef } from "./cursor-window.js";
 
 function quoteAppleScriptString(value: string): string {
   return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
-}
-
-interface CursorWindowSnapshot {
-  title: string | null;
-  document: string | null;
-  workspace: string | null;
-  x: number | null;
-  y: number | null;
-  width: number | null;
-  height: number | null;
-}
-
-function parseCursorWindowRef(windowRef: string | null): CursorWindowSnapshot | null {
-  if (!windowRef?.startsWith("cursor-window:")) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(windowRef.slice("cursor-window:".length)) as CursorWindowSnapshot;
-  } catch {
-    return null;
-  }
 }
 
 export function cursorScript(

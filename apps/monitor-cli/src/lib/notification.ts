@@ -1,11 +1,14 @@
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
+import { promisify } from "node:util";
 import type { TaskRecord } from "@monitor/contracts";
 import { buildFocusScript } from "./focus/router.js";
+import { parseCursorWindowRef } from "./focus/cursor-window.js";
 
 const WAITING_ALERT_SOUND_PLAYER = "/usr/bin/afplay";
 const WAITING_ALERT_SOUND_FILE = "/System/Library/Sounds/Glass.aiff";
+const execFileAsync = promisify(execFile);
 
 function shouldNotify(status: TaskRecord["status"]): boolean {
   return (
@@ -68,6 +71,107 @@ function quoteAppleScriptString(value: string): string {
 
 function isWaitingTask(task: TaskRecord): boolean {
   return task.status === "waiting_input" || task.status === "waiting_approval";
+}
+
+async function isTaskVisibleInFront(task: TaskRecord): Promise<boolean> {
+  if (task.hostApp === "terminal") {
+    if (!task.hostWindowRef || !/^\d+$/.test(task.hostWindowRef)) {
+      return false;
+    }
+
+    try {
+      const { stdout } = await execFileAsync("osascript", [
+        "-e",
+        'tell application "Terminal"',
+        "-e",
+        "if not running then return \"false\"",
+        "-e",
+        'if (count of windows) is 0 then return "false"',
+        "-e",
+        `return (id of front window as text) is ${quoteAppleScriptString(task.hostWindowRef)}`
+      ]);
+      return String(stdout).trim() === "true";
+    } catch {
+      return false;
+    }
+  }
+
+  if (task.hostApp === "iterm2") {
+    if (!task.hostSessionRef) {
+      return false;
+    }
+
+    try {
+      const { stdout } = await execFileAsync("osascript", [
+        "-e",
+        'tell application "iTerm2"',
+        "-e",
+        "if not running then return \"false\"",
+        "-e",
+        'if (count of windows) is 0 then return "false"',
+        "-e",
+        "tell current session of current tab of current window",
+        "-e",
+        `return (tty as text) is ${quoteAppleScriptString(task.hostSessionRef)}`,
+        "-e",
+        "end tell",
+        "-e",
+        "end tell"
+      ]);
+      return String(stdout).trim() === "true";
+    } catch {
+      return false;
+    }
+  }
+
+  if (task.hostApp === "cursor") {
+    const snapshot = parseCursorWindowRef(task.hostWindowRef);
+    if (!snapshot) {
+      return false;
+    }
+
+    try {
+      const { stdout } = await execFileAsync("osascript", [
+        "-e",
+        'tell application "System Events"',
+        "-e",
+        'if not (exists process "Cursor") then return "false"',
+        "-e",
+        'tell process "Cursor"',
+        "-e",
+        'if (count of windows) is 0 then return "false"',
+        "-e",
+        "set targetWindow to front window",
+        "-e",
+        'set titleValue to ""',
+        "-e",
+        'set documentValue to ""',
+        "-e",
+        'try',
+        "-e",
+        'set titleValue to (value of attribute "AXTitle" of targetWindow as text)',
+        "-e",
+        "end try",
+        "-e",
+        'try',
+        "-e",
+        'set documentValue to (value of attribute "AXDocument" of targetWindow as text)',
+        "-e",
+        "end try",
+        "-e",
+        `return (titleValue is ${quoteAppleScriptString(snapshot.title ?? "")}) or (documentValue is ${quoteAppleScriptString(snapshot.document ?? "")})`,
+        "-e",
+        "end tell",
+        "-e",
+        "end tell"
+      ]);
+      return String(stdout).trim() === "true";
+    } catch {
+      return false;
+    }
+  }
+
+  return false;
 }
 
 function buildDialogTitle(task: TaskRecord): string {
@@ -152,6 +256,9 @@ export async function notifyTask(task: TaskRecord): Promise<void> {
 
   if (isWaitingTask(task)) {
     await playWaitingAlertSound().catch(() => undefined);
+    if (await isTaskVisibleInFront(task)) {
+      return;
+    }
     await spawnDetached("osascript", ["-e", buildDialogScript(task)]);
     return;
   }

@@ -1,6 +1,8 @@
 import { execFileSync } from "node:child_process";
 import { basename } from "node:path";
 import type { HostApp } from "@monitor/contracts";
+import type { CursorWindowSnapshot } from "./focus/cursor-window.js";
+import { parseCursorWindowRef } from "./focus/cursor-window.js";
 
 export interface HostMetadata {
   hostApp: HostApp;
@@ -19,16 +21,6 @@ export interface DetectHostMetadataOptions {
   cursorWindowRefResolver?: () => string | null;
   ttyRef?: string | null;
   cwd?: string | null;
-}
-
-interface CursorWindowSnapshot {
-  title: string | null;
-  document: string | null;
-  workspace: string | null;
-  x: number | null;
-  y: number | null;
-  width: number | null;
-  height: number | null;
 }
 
 export function detectHostApp(
@@ -103,34 +95,30 @@ function normalizeCursorWindowRef(
   windowRef: string | null,
   cwd: string | null
 ): string | null {
-  if (!windowRef?.startsWith("cursor-window:")) {
+  const snapshot = parseCursorWindowRef(windowRef);
+  if (!snapshot) {
     return windowRef;
   }
 
-  try {
-    const snapshot = JSON.parse(windowRef.slice("cursor-window:".length)) as CursorWindowSnapshot;
-    const documentBasename = /\/([^/]+?)(?:\/)?$/.exec(snapshot.document ?? "")?.[1] ?? null;
-    const shouldNormalize =
-      !snapshot.workspace ||
-      snapshot.workspace === documentBasename ||
-      /\.[A-Za-z0-9]+$/.test(snapshot.workspace);
+  const documentBasename = /\/([^/]+?)(?:\/)?$/.exec(snapshot.document ?? "")?.[1] ?? null;
+  const shouldNormalize =
+    !snapshot.workspace ||
+    snapshot.workspace === documentBasename ||
+    /\.[A-Za-z0-9]+$/.test(snapshot.workspace);
 
-    if (!shouldNormalize) {
-      return windowRef;
-    }
-
-    const workspace = cwd ? basename(cwd) : snapshot.workspace;
-    if (!workspace || workspace === snapshot.workspace) {
-      return windowRef;
-    }
-
-    return serializeCursorWindowSnapshot({
-      ...snapshot,
-      workspace
-    });
-  } catch {
+  if (!shouldNormalize) {
     return windowRef;
   }
+
+  const workspace = cwd ? basename(cwd) : snapshot.workspace;
+  if (!workspace || workspace === snapshot.workspace) {
+    return windowRef;
+  }
+
+  return serializeCursorWindowSnapshot({
+    ...snapshot,
+    workspace
+  });
 }
 
 export function resolveCursorWindowRef(): string | null {
