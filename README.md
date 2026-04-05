@@ -28,6 +28,22 @@ HOMEBREW_NO_AUTO_UPDATE=1 brew install ycloud-sean/monitor/monitor
 升级：
 
 ```bash
+brew upgrade ycloud-sean/monitor/monitor
+```
+
+如果你只是想先刷新 tap，再避免重复触发 Homebrew 的大范围自动更新，也可以执行：
+
+```bash
+brew update
+HOMEBREW_NO_AUTO_UPDATE=1 brew upgrade ycloud-sean/monitor/monitor
+```
+
+如果你是很早安装的 `1.0.6`，并且执行升级后仍然停在 `1.0.6`，说明本地 tap 历史和远端分叉了。先执行一次下面这组修复命令，再重新升级：
+
+```bash
+repo="$(brew --repo ycloud-sean/monitor)"
+git -C "$repo" fetch origin
+git -C "$repo" reset --hard origin/main
 HOMEBREW_NO_AUTO_UPDATE=1 brew upgrade ycloud-sean/monitor/monitor
 ```
 
@@ -59,7 +75,7 @@ export PATH="$HOME/.local/bin:$PATH"
 
 - Homebrew 的 tap 仓库只保留很小的 formula 和文档，真正的 runtime 包会在安装阶段单独下载
 - Homebrew 包安装的是预构建运行包，不会在用户机器上再执行一次 `npm install + tsc`
-- `HOMEBREW_NO_AUTO_UPDATE=1` 用来避免长时间卡在 `==> Auto-updating Homebrew...`
+- `HOMEBREW_NO_AUTO_UPDATE=1` 更适合首次安装；如果你要升级到新版本，先让 Homebrew 或 tap 完成一次更新，否则 `brew upgrade` 看不到最新 formula
 - 不建议额外加 `HOMEBREW_NO_INSTALL_FROM_API=1`；在 Homebrew 5 下，它可能触发 `homebrew/core` 的首次 clone，反而更慢
 - 当前 Homebrew 分发方案只支持 `macOS arm64`
 - Homebrew 包会直接复用用户本机的 `node`
