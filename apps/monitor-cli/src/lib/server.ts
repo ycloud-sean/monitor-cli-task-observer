@@ -176,11 +176,16 @@ async function handleRequest(
   req: IncomingMessage,
   res: ServerResponse,
   registry: TaskRegistry,
-  persistence: Persistence
+  persistence: Persistence,
+  daemonMetadata: { scriptPath?: string }
 ): Promise<void> {
   try {
     if (req.method === "GET" && req.url === "/health") {
-      sendJson(res, 200, { ok: true });
+      sendJson(res, 200, {
+        ok: true,
+        pid: process.pid,
+        scriptPath: daemonMetadata.scriptPath
+      });
       return;
     }
 
@@ -237,6 +242,7 @@ async function handleRequest(
 export async function createDaemonServer(options: {
   port: number;
   dataDir: string;
+  scriptPath?: string;
 }) {
   mkdirSync(options.dataDir, { recursive: true });
   const persistence = new Persistence(join(options.dataDir, "monitor.sqlite"));
@@ -244,7 +250,9 @@ export async function createDaemonServer(options: {
   for (const task of persistence.loadTasks()) registry.upsert(task);
 
   const server = createServer((req, res) => {
-    void handleRequest(req, res, registry, persistence);
+    void handleRequest(req, res, registry, persistence, {
+      scriptPath: options.scriptPath
+    });
   });
 
   try {

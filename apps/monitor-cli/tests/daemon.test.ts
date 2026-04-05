@@ -79,7 +79,14 @@ describe("daemon helpers", () => {
   });
 
   it("does not spawn a daemon when one is already healthy", async () => {
-    const fetchImpl = vi.fn(async () => ({ ok: true } as Response));
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        pid: 321,
+        scriptPath: "/tmp/monitor-cli/dist/bin/monitord.js"
+      })
+    }));
     const spawnProcess = vi.fn();
 
     await ensureDaemonRunning({
@@ -90,6 +97,61 @@ describe("daemon helpers", () => {
     });
 
     expect(spawnProcess).not.toHaveBeenCalled();
+  });
+
+  it("replaces a healthy daemon from a different installation before spawning the current one", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          ok: true,
+          pid: 456,
+          scriptPath: "/tmp/legacy-monitor/dist/bin/monitord.js"
+        })
+      })
+      .mockResolvedValueOnce({ ok: false } as Response)
+      .mockResolvedValueOnce({ ok: false } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          ok: true,
+          pid: 789,
+          scriptPath: "/tmp/monitor-cli/dist/bin/monitord.js"
+        })
+      });
+    const sleepImpl = vi.fn(async () => undefined);
+    const spawnProcess = vi.fn(() => {
+      const child = new FakeChildProcess();
+      queueMicrotask(() => child.emit("spawn"));
+      return child;
+    });
+    const killProcess = vi.fn();
+
+    await ensureDaemonRunning({
+      baseUrl: "http://127.0.0.1:45731",
+      moduleUrl: "file:///tmp/monitor-cli/dist/bin/monitor.js",
+      processExecPath: "/usr/local/bin/node",
+      fetchImpl: fetchImpl as unknown as (input: string) => Promise<{ ok: boolean }>,
+      sleepImpl,
+      spawnProcess: spawnProcess as unknown as typeof import("node:child_process").spawn,
+      killProcess,
+      startupAttempts: 2,
+      startupDelayMs: 1
+    });
+
+    expect(killProcess).toHaveBeenCalledWith(456, "SIGTERM");
+    expect(spawnProcess).toHaveBeenCalledWith(
+      "/usr/local/bin/node",
+      ["/tmp/monitor-cli/dist/bin/monitord.js"],
+      expect.objectContaining({
+        detached: true,
+        stdio: "ignore",
+        env: expect.objectContaining({
+          MONITOR_PORT: "45731"
+        })
+      })
+    );
   });
 
   it("spawns monitord and waits for health when the local daemon is down", async () => {
@@ -145,5 +207,51 @@ describe("daemon helpers", () => {
         fetchImpl: fetchImpl as unknown as (input: string) => Promise<{ ok: boolean }>
       })
     ).rejects.toThrow("automatic startup only supports local");
+  });
+
+  it("falls back to lsof when replacing a legacy daemon without health metadata", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true } as Response)
+      .mockResolvedValueOnce({ ok: false } as Response)
+      .mockResolvedValueOnce({ ok: false } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          ok: true,
+          pid: 987,
+          scriptPath: "/tmp/monitor-cli/dist/bin/monitord.js"
+        })
+      });
+    const sleepImpl = vi.fn(async () => undefined);
+    const spawnProcess = vi.fn(() => {
+      const child = new FakeChildProcess();
+      queueMicrotask(() => child.emit("spawn"));
+      return child;
+    });
+    const killProcess = vi.fn();
+    const execFileImpl = vi.fn(async () => ({ stdout: "p654\n", stderr: "" }));
+
+    await ensureDaemonRunning({
+      baseUrl: "http://127.0.0.1:45731",
+      moduleUrl: "file:///tmp/monitor-cli/dist/bin/monitor.js",
+      processExecPath: "/usr/local/bin/node",
+      fetchImpl: fetchImpl as unknown as (input: string) => Promise<{ ok: boolean }>,
+      sleepImpl,
+      spawnProcess: spawnProcess as unknown as typeof import("node:child_process").spawn,
+      execFileImpl,
+      killProcess,
+      startupAttempts: 2,
+      startupDelayMs: 1
+    });
+
+    expect(execFileImpl).toHaveBeenCalledWith("lsof", [
+      "-nP",
+      "-iTCP:45731",
+      "-sTCP:LISTEN",
+      "-Fp"
+    ]);
+    expect(killProcess).toHaveBeenCalledWith(654, "SIGTERM");
+    expect(spawnProcess).toHaveBeenCalledOnce();
   });
 });

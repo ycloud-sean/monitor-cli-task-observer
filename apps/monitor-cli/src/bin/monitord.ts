@@ -10,7 +10,11 @@ const dataDir = process.env.MONITOR_DATA_DIR ?? join(homedir(), ".monitor-data")
 const port = Number(process.env.MONITOR_PORT ?? "45731");
 
 function main(): void {
-  createDaemonServer({ port, dataDir })
+  createDaemonServer({
+    port,
+    dataDir,
+    scriptPath: fileURLToPath(import.meta.url)
+  })
     .then((server) => {
       process.stdout.write(
         JSON.stringify({ type: "daemon.started", port: server.port, dataDir }) + "\n"

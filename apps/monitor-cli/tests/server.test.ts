@@ -84,14 +84,25 @@ describe("daemon server", () => {
   it("reports daemon health for local startup probes", async () => {
     const dataDir = mkdtempSync(join(tmpdir(), "monitor-daemon-"));
     dirs.push(dataDir);
-    const server = await createDaemonServer({ port: 0, dataDir });
+    const server = await createDaemonServer({
+      port: 0,
+      dataDir,
+      scriptPath: "/tmp/current-monitor/dist/bin/monitord.js"
+    });
 
     try {
       const baseUrl = `http://127.0.0.1:${server.port}`;
       const response = await fetch(`${baseUrl}/health`);
+      const body = (await response.json()) as {
+        ok: boolean;
+        pid?: number;
+        scriptPath?: string;
+      };
 
       expect(response.status).toBe(200);
-      await expect(response.json()).resolves.toEqual({ ok: true });
+      expect(body.ok).toBe(true);
+      expect(body.pid).toEqual(expect.any(Number));
+      expect(body.scriptPath).toBe("/tmp/current-monitor/dist/bin/monitord.js");
     } finally {
       await server.close();
     }
