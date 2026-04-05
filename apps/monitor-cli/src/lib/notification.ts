@@ -93,6 +93,7 @@ ${buildFocusScript(task)}
 end if`;
 
   return `
+beep 1
 tell application "System Events"
   activate
   set dialogResult to display dialog ${quoteAppleScriptString(buildDialogMessage(task))} with title ${quoteAppleScriptString(buildDialogTitle(task))} buttons {"忽略", "打开任务"} default button "打开任务"

@@ -108,6 +108,7 @@ describe("notifyTask", () => {
       "osascript",
       expect.arrayContaining([
         "-e",
+        expect.stringContaining("beep 1"),
         expect.stringContaining("任务“needs-reply”正在等待你输入。"),
         expect.stringContaining("Monitor 等待输入"),
         expect.stringContaining('buttons {"忽略", "打开任务"}'),
