@@ -4,6 +4,9 @@ import { createRequire } from "node:module";
 import type { TaskRecord } from "@monitor/contracts";
 import { buildFocusScript } from "./focus/router.js";
 
+const WAITING_ALERT_SOUND_PLAYER = "/usr/bin/afplay";
+const WAITING_ALERT_SOUND_FILE = "/System/Library/Sounds/Glass.aiff";
+
 function shouldNotify(status: TaskRecord["status"]): boolean {
   return (
     status === "waiting_input" ||
@@ -93,7 +96,6 @@ ${buildFocusScript(task)}
 end if`;
 
   return `
-beep 1
 tell application "System Events"
   activate
   set dialogResult to display dialog ${quoteAppleScriptString(buildDialogMessage(task))} with title ${quoteAppleScriptString(buildDialogTitle(task))} buttons {"忽略", "打开任务"} default button "打开任务"
@@ -139,12 +141,17 @@ async function spawnDetached(
   child.unref();
 }
 
+async function playWaitingAlertSound(): Promise<void> {
+  await spawnDetached(WAITING_ALERT_SOUND_PLAYER, [WAITING_ALERT_SOUND_FILE]);
+}
+
 export async function notifyTask(task: TaskRecord): Promise<void> {
   if (!shouldNotifyTaskUpdate(undefined, task)) {
     return;
   }
 
   if (isWaitingTask(task)) {
+    await playWaitingAlertSound().catch(() => undefined);
     await spawnDetached("osascript", ["-e", buildDialogScript(task)]);
     return;
   }

@@ -104,21 +104,84 @@ describe("notifyTask", () => {
       })
     );
 
-    expect(spawn).toHaveBeenCalledWith(
-      "osascript",
-      expect.arrayContaining([
-        "-e",
-        expect.stringContaining("beep 1"),
-        expect.stringContaining("任务“needs-reply”正在等待你输入。"),
-        expect.stringContaining("Monitor 等待输入"),
-        expect.stringContaining('buttons {"忽略", "打开任务"}'),
-        expect.stringContaining('if button returned of dialogResult is "打开任务" then'),
-        expect.stringContaining('tell application "Cursor"')
-      ]),
+    expect(spawn).toHaveBeenNthCalledWith(
+      1,
+      "/usr/bin/afplay",
+      ["/System/Library/Sounds/Glass.aiff"],
       expect.objectContaining({
         detached: true,
         stdio: "ignore"
       })
     );
+    expect(spawn).toHaveBeenNthCalledWith(
+      2,
+      "osascript",
+      expect.any(Array),
+      expect.objectContaining({
+        detached: true,
+        stdio: "ignore"
+      })
+    );
+    const osascriptArgs = spawn.mock.calls[1]?.[1];
+    const script = osascriptArgs?.[1];
+    expect(osascriptArgs?.[0]).toBe("-e");
+    expect(script).not.toContain("beep 1");
+    expect(script).toContain("任务“needs-reply”正在等待你输入。");
+    expect(script).toContain("Monitor 等待输入");
+    expect(script).toContain('buttons {"忽略", "打开任务"}');
+    expect(script).toContain('if button returned of dialogResult is "打开任务" then');
+    expect(script).toContain('tell application "Cursor"');
+  });
+
+  it("still shows the dialog if the waiting sound fails", async () => {
+    let spawnCall = 0;
+    const spawn = vi.fn(() => {
+      spawnCall += 1;
+      const child = new EventEmitter() as EventEmitter & { unref: () => void };
+      child.unref = vi.fn();
+      queueMicrotask(() => {
+        if (spawnCall === 1) {
+          child.emit("error", new Error("afplay failed"));
+          return;
+        }
+
+        child.emit("spawn");
+      });
+      return child;
+    });
+
+    vi.doMock("node:child_process", () => ({ spawn }));
+
+    const { notifyTask } = await import("../src/lib/notification.js");
+    await notifyTask(
+      makeTask({
+        status: "waiting_approval",
+        name: "needs-approval"
+      })
+    );
+
+    expect(spawn).toHaveBeenNthCalledWith(
+      1,
+      "/usr/bin/afplay",
+      ["/System/Library/Sounds/Glass.aiff"],
+      expect.objectContaining({
+        detached: true,
+        stdio: "ignore"
+      })
+    );
+    expect(spawn).toHaveBeenNthCalledWith(
+      2,
+      "osascript",
+      expect.any(Array),
+      expect.objectContaining({
+        detached: true,
+        stdio: "ignore"
+      })
+    );
+    const osascriptArgs = spawn.mock.calls[1]?.[1];
+    const script = osascriptArgs?.[1];
+    expect(osascriptArgs?.[0]).toBe("-e");
+    expect(script).toContain("任务“needs-approval”正在等待你审批。");
+    expect(script).toContain("Monitor 等待审批");
   });
 });
