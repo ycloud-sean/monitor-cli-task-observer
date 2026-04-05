@@ -235,4 +235,46 @@ describe("notifyTask", () => {
       expect.any(Function)
     );
   });
+
+  it("suppresses the dialog for Terminal tasks when the selected front tab tty matches", async () => {
+    const spawn = vi.fn(() => {
+      const child = new EventEmitter() as EventEmitter & { unref: () => void };
+      child.unref = vi.fn();
+      queueMicrotask(() => child.emit("spawn"));
+      return child;
+    });
+    const execFile = vi.fn((_command: string, _args: string[], callback: Function) => {
+      queueMicrotask(() => callback(null, { stdout: "true\n", stderr: "" }));
+    });
+
+    vi.doMock("node:child_process", () => ({ spawn, execFile }));
+
+    const { notifyTask } = await import("../src/lib/notification.js");
+    await notifyTask(
+      makeTask({
+        status: "waiting_input",
+        name: "needs-reply",
+        hostApp: "terminal",
+        hostWindowRef: "2E190177-7CD9-4678-8E24-13D260954522",
+        hostSessionRef: "/dev/ttys013"
+      })
+    );
+
+    expect(spawn).toHaveBeenCalledTimes(1);
+    expect(spawn).toHaveBeenNthCalledWith(
+      1,
+      "/usr/bin/afplay",
+      ["/System/Library/Sounds/Glass.aiff"],
+      expect.objectContaining({
+        detached: true,
+        stdio: "ignore"
+      })
+    );
+    expect(execFile).toHaveBeenCalledTimes(1);
+    const args = execFile.mock.calls[0]?.[1];
+    expect(args).toContain('tell application "Terminal"');
+    expect(args).toContain(
+      'return (tty of selected tab of front window as text) is "/dev/ttys013"'
+    );
+  });
 });

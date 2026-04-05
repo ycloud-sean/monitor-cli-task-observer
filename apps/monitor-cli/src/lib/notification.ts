@@ -75,25 +75,55 @@ function isWaitingTask(task: TaskRecord): boolean {
 
 async function isTaskVisibleInFront(task: TaskRecord): Promise<boolean> {
   if (task.hostApp === "terminal") {
-    if (!task.hostWindowRef || !/^\d+$/.test(task.hostWindowRef)) {
-      return false;
+    if (task.hostSessionRef) {
+      try {
+        const { stdout } = await execFileAsync("osascript", [
+          "-e",
+          'tell application "Terminal"',
+          "-e",
+          "if not running then return \"false\"",
+          "-e",
+          'if (count of windows) is 0 then return "false"',
+          "-e",
+          'try',
+          "-e",
+          `return (tty of selected tab of front window as text) is ${quoteAppleScriptString(task.hostSessionRef)}`,
+          "-e",
+          'on error',
+          "-e",
+          'return "false"',
+          "-e",
+          "end try",
+          "-e",
+          "end tell"
+        ]);
+        return String(stdout).trim() === "true";
+      } catch {
+        return false;
+      }
     }
 
-    try {
-      const { stdout } = await execFileAsync("osascript", [
-        "-e",
-        'tell application "Terminal"',
-        "-e",
-        "if not running then return \"false\"",
-        "-e",
-        'if (count of windows) is 0 then return "false"',
-        "-e",
-        `return (id of front window as text) is ${quoteAppleScriptString(task.hostWindowRef)}`
-      ]);
-      return String(stdout).trim() === "true";
-    } catch {
-      return false;
+    if (task.hostWindowRef && /^\d+$/.test(task.hostWindowRef)) {
+      try {
+        const { stdout } = await execFileAsync("osascript", [
+          "-e",
+          'tell application "Terminal"',
+          "-e",
+          "if not running then return \"false\"",
+          "-e",
+          'if (count of windows) is 0 then return "false"',
+          "-e",
+          `return (id of front window as text) is ${quoteAppleScriptString(task.hostWindowRef)}`,
+          "-e",
+          "end tell"
+        ]);
+        return String(stdout).trim() === "true";
+      } catch {
+        return false;
+      }
     }
+
+    return false;
   }
 
   if (task.hostApp === "iterm2") {
