@@ -2,11 +2,11 @@ class Monitor < Formula
   desc "Task observer wrapper for codex and claude on macOS"
   homepage "https://github.com/ycloud-sean/monitor-cli-task-observer"
   license "ISC"
-  version "1.0.12"
+  version "1.0.13"
 
-  url "https://cdn.jsdelivr.net/gh/ycloud-sean/monitor-cli-task-observer@homebrew-artifacts/monitor-runtime-v1.0.12-macos-arm64.tar.gz"
-  mirror "https://raw.githubusercontent.com/ycloud-sean/monitor-cli-task-observer/homebrew-artifacts/monitor-runtime-v1.0.12-macos-arm64.tar.gz"
-  sha256 "8b905f74534cb5b9af39d3e5a62cb6e45cfc6b77ded86b856dfa60de5ef98e14"
+  url "https://cdn.jsdelivr.net/gh/ycloud-sean/monitor-cli-task-observer@homebrew-artifacts/monitor-runtime-v1.0.13-macos-arm64.tar.gz"
+  mirror "https://raw.githubusercontent.com/ycloud-sean/monitor-cli-task-observer/homebrew-artifacts/monitor-runtime-v1.0.13-macos-arm64.tar.gz"
+  sha256 "4361f9fde982e08c4183df998329311ce67157b5c45443a832c79f17b4dceffc"
   head "https://github.com/ycloud-sean/monitor-cli-task-observer.git", branch: "main"
 
   depends_on arch: :arm64

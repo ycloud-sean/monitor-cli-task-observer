@@ -40,8 +40,6 @@ describe("buildFocusScript", () => {
       cwd: "/tmp/project-a"
     });
 
-    expect(script).toContain('set targetCwd to "/tmp/project-a"');
-    expect(script).toContain('do shell script "/usr/bin/open -a Cursor " & quoted form of targetCwd');
     expect(script).toContain('tell application "Cursor"');
     expect(script).toContain('set targetTitle to "Cursor A — project-a"');
     expect(script).toContain('set targetDocument to "file:///tmp/project-a/README.md"');

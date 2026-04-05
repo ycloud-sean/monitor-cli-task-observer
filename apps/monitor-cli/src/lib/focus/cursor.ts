@@ -11,13 +11,6 @@ export function cursorScript(
   taskId: string | null = null
 ): string {
   const snapshot = parseCursorWindowRef(windowRef);
-  const openWorkspaceScript = cwd
-    ? `
-set targetCwd to ${quoteAppleScriptString(cwd)}
-do shell script "/usr/bin/open -a Cursor " & quoted form of targetCwd
-delay 0.5
-`
-    : "";
   const focusTerminalScript = taskId
     ? `
 delay 0.1
@@ -115,7 +108,6 @@ end try
     : "";
 
   return `
-${openWorkspaceScript}
 tell application "Cursor"
   activate
 end tell
