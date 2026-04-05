@@ -14,7 +14,8 @@ function parseMonitorUri(uri) {
     action,
     taskId: params.get("taskId"),
     name: params.get("name"),
-    cwd: params.get("cwd")
+    cwd: params.get("cwd"),
+    monitorPid: params.get("monitorPid")
   };
 }
 

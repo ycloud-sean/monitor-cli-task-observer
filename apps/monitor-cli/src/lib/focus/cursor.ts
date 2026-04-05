@@ -45,7 +45,8 @@ delay 0.1
 try
   open location ${quoteAppleScriptString(
     buildCursorBridgeUri("focus", {
-      taskId
+      taskId,
+      cwd
     })
   )}
 end try

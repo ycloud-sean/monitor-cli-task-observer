@@ -244,7 +244,8 @@ export async function main(): Promise<void> {
         buildCursorBridgeUri("register", {
           taskId,
           name: displayName,
-          cwd: process.cwd()
+          cwd: process.cwd(),
+          monitorPid: String(process.pid)
         })
       );
     }

@@ -1,5 +1,10 @@
 const vscode = require("vscode");
-const { forgetTerminal, resolveTerminal } = require("./lib/registry");
+const {
+  forgetTerminal,
+  resolveTerminal,
+  resolveTerminalByCwd,
+  resolveTerminalByMonitorPid
+} = require("./lib/registry");
 const { parseMonitorUri } = require("./lib/uri");
 
 const taskRegistry = new Map();
@@ -12,8 +17,8 @@ function getOutputChannel() {
   return getOutputChannel.channel;
 }
 
-async function focusTerminal(taskId) {
-  const terminal = resolveTerminal(taskRegistry, taskId, vscode.window.terminals);
+async function focusTerminal(taskId, cwd) {
+  const terminal = resolveTerminal(taskRegistry, taskId, vscode.window.terminals, cwd);
   if (!terminal) {
     await vscode.commands.executeCommand("workbench.action.terminal.focus");
     vscode.window.showWarningMessage(
@@ -34,7 +39,17 @@ async function handleUri(uri) {
 
   const output = getOutputChannel();
   if (parsed.action === "register") {
-    const terminal = vscode.window.activeTerminal;
+    let terminal = await resolveTerminalByMonitorPid(
+      vscode.window.terminals,
+      parsed.monitorPid
+    );
+    if (!terminal) {
+      terminal = resolveTerminalByCwd(vscode.window.terminals, parsed.cwd);
+    }
+    if (!terminal) {
+      terminal = vscode.window.activeTerminal;
+    }
+
     if (!terminal) {
       output.appendLine(`skip register ${parsed.taskId}: no active terminal`);
       return;
@@ -46,7 +61,7 @@ async function handleUri(uri) {
   }
 
   output.appendLine(`focus ${parsed.taskId}`);
-  await focusTerminal(parsed.taskId);
+  await focusTerminal(parsed.taskId, parsed.cwd);
 }
 
 function activate(context) {

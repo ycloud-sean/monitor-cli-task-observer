@@ -49,7 +49,7 @@ describe("buildFocusScript", () => {
     expect(script).toContain('set targetSize to {1440, 900}');
     expect(script).toContain('perform action "AXRaise"');
     expect(script).toContain(
-      'open location "cursor://liangxin.monitor-cursor-bridge/focus?taskId=3bbe7821-f8af-4654-b784-cfba51200232"'
+      'open location "cursor://liangxin.monitor-cursor-bridge/focus?taskId=3bbe7821-f8af-4654-b784-cfba51200232&cwd=%2Ftmp%2Fproject-a"'
     );
   });
 });
