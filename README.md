@@ -57,11 +57,23 @@ rm -rf ~/.cursor/extensions/liangxin.monitor-cursor-bridge-0.1.0
 
 ### 3. 备选：curl 安装脚本
 
-安装或升级都使用同一条命令：
+安装：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ycloud-sean/monitor-cli-task-observer/main/scripts/install.sh | bash
 ```
+
+升级：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ycloud-sean/monitor-cli-task-observer/main/scripts/install.sh | bash
+```
+
+说明：
+
+- `curl` 安装脚本会自动判断本地是否已存在 `~/.monitor/monitor-cli-task-observer`
+- 如果已存在，会执行更新；如果不存在，会执行首次安装
+- 所以 `curl` 方式的升级命令和安装命令是同一条
 
 安装脚本会自动完成这些事情：
 
@@ -79,7 +91,7 @@ source ~/.zshrc
 
 或者直接开一个新终端。
 
-卸载 `curl` 安装版：
+卸载：
 
 ```bash
 rm -f ~/.local/bin/monitor ~/.local/bin/monitord
