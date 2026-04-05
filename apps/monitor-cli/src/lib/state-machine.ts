@@ -2,6 +2,17 @@ import type { TaskEvent, TaskRecord } from "@monitor/contracts";
 
 type TaskTransitionEvent = Exclude<TaskEvent, { type: "task.started" }>;
 
+function stripTerminalControlSequences(text: string): string {
+  return text
+    .replace(/\u001B\][^\u0007]*(?:\u0007|\u001B\\)/g, "")
+    .replace(/\u001B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g, "")
+    .replace(/[\u0000-\u001F\u007F]/g, "");
+}
+
+function hasVisibleOutput(chunk: string): boolean {
+  return stripTerminalControlSequences(chunk).trim().length > 0;
+}
+
 function assertNever(value: never): never {
   throw new Error(`Unhandled task transition event: ${JSON.stringify(value)}`);
 }
@@ -21,6 +32,16 @@ export function applyEvent(
 
   switch (event.type) {
     case "task.output":
+      if (
+        (task.status === "waiting_input" || task.status === "waiting_approval") &&
+        !hasVisibleOutput(event.payload.chunk)
+      ) {
+        return {
+          ...task,
+          lastEventAt: event.at
+        };
+      }
+
       return {
         ...task,
         status:

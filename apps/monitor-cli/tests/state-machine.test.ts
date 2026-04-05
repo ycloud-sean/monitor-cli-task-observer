@@ -45,6 +45,24 @@ describe("applyEvent", () => {
     expect(next.lastOutputExcerpt).toContain("continuing work");
   });
 
+  it("keeps waiting_input when output is only terminal redraw noise", () => {
+    const waiting = {
+      ...makeTask(),
+      status: "waiting_input" as const,
+      lastEventAt: "2026-04-03T08:00:30.000Z"
+    };
+    const next = applyEvent(waiting, {
+      type: "task.output",
+      taskId: "task-1",
+      at: "2026-04-03T08:01:00.000Z",
+      payload: { chunk: "\u001b[?2026h\u0007\u001b]0;\u0007" }
+    });
+
+    expect(next.status).toBe("waiting_input");
+    expect(next.lastEventAt).toBe("2026-04-03T08:01:00.000Z");
+    expect(next.lastOutputExcerpt).toBe("");
+  });
+
   it("does not move a finished task back to waiting_approval", () => {
     const finished = { ...makeTask(), status: "finished" as const };
     const next = applyEvent(finished, {
