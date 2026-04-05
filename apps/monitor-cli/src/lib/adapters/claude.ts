@@ -38,6 +38,16 @@ export function buildClaudeSettings(options: {
             }
           ]
         }
+      ],
+      SessionEnd: [
+        {
+          hooks: [
+            {
+              type: "command",
+              command: `${baseCommand} SessionEnd`
+            }
+          ]
+        }
       ]
     }
   };
@@ -45,12 +55,20 @@ export function buildClaudeSettings(options: {
 
 export function translateClaudeHook(
   taskId: string,
-  hookName: "Notification" | "Stop",
+  hookName: "Notification" | "Stop" | "SessionEnd",
   hookPayload = ""
 ): TaskEvent {
-  if (hookName === "Stop") {
+  if (hookName === "SessionEnd") {
     return {
       type: "task.finished",
+      taskId,
+      at: new Date().toISOString()
+    };
+  }
+
+  if (hookName === "Stop") {
+    return {
+      type: "task.waiting_input",
       taskId,
       at: new Date().toISOString()
     };

@@ -68,11 +68,17 @@ export async function main(): Promise<void> {
   }
 
   if (runner === "claude") {
-    if (payloadText !== "Notification" && payloadText !== "Stop") {
+    if (
+      payloadText !== "Notification" &&
+      payloadText !== "Stop" &&
+      payloadText !== "SessionEnd"
+    ) {
       return;
     }
 
-    await client.postEvent(translateClaudeHook(taskId, payloadText, stdinPayload));
+    await client.postEvent(
+      translateClaudeHook(taskId, payloadText, stdinPayload)
+    );
   }
 }
 

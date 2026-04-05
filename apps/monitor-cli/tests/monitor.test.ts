@@ -182,6 +182,23 @@ describe("monitor-hook argument/payload parsing", () => {
     });
   });
 
+  it("parses claude SessionEnd hooks from positional arguments", () => {
+    const args = parseHookArgs([
+      "node",
+      "monitor-hook.js",
+      "claude",
+      "task-1",
+      "http://127.0.0.1:45731",
+      "SessionEnd"
+    ]);
+    expect(args).toEqual({
+      runner: "claude",
+      taskId: "task-1",
+      daemonUrl: "http://127.0.0.1:45731",
+      payloadText: "SessionEnd"
+    });
+  });
+
   it("falls back to the last argv entry for payload text", () => {
     const args = parseHookArgs([
       "node",
