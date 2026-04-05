@@ -46,6 +46,7 @@ rm -rf ~/.cursor/extensions/liangxin.monitor-cursor-bridge-0.1.0
 
 说明：
 
+- Homebrew 的 tap 仓库只保留很小的 formula 和文档，真正的 runtime 包会在安装阶段单独下载
 - Homebrew 包安装的是预构建运行包，不会在用户机器上再执行一次 `npm install + tsc`
 - `HOMEBREW_NO_AUTO_UPDATE=1` 用来避免长时间卡在 `==> Auto-updating Homebrew...`
 - 不建议额外加 `HOMEBREW_NO_INSTALL_FROM_API=1`；在 Homebrew 5 下，它可能触发 `homebrew/core` 的首次 clone，反而更慢
