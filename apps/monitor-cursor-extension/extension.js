@@ -1,5 +1,3 @@
-const { execFile } = require("node:child_process");
-const { promisify } = require("node:util");
 const vscode = require("vscode");
 const {
   forgetTerminal,
@@ -11,16 +9,24 @@ const {
   resolveTerminalByMonitorPid
 } = require("./lib/registry");
 const {
-  buildFocusRerouteScript,
-  shouldRerouteFocus
-} = require("./lib/focus");
+  enqueuePendingFocusRequest,
+  getPendingFocusRequestStorePath,
+  pruneExpiredPendingFocusRequests,
+  readPendingFocusRequests,
+  writePendingFocusRequests
+} = require("./lib/focus-queue");
 const { parseMonitorUri } = require("./lib/uri");
 
 const TASK_STATE_KEY = "monitor.cursor.task-state.v1";
-const execFileAsync = promisify(execFile);
+const PENDING_FOCUS_POLL_INTERVAL_MS = 250;
+const PENDING_FOCUS_WARNING_DELAY_MS = 1500;
 const taskRegistry = new Map();
 let taskStateRegistry = new Map();
 let extensionContext = null;
+let focusRequestStorePath = null;
+let focusRequestPollTimer = null;
+let processingPendingFocusRequests = false;
+const pendingFocusWarningTimers = new Map();
 
 function getOutputChannel() {
   if (!getOutputChannel.channel) {
@@ -123,21 +129,89 @@ async function resolveFocusedTerminal(taskId, cwd, processId) {
   return { terminal: null, source: "missing" };
 }
 
-async function rerouteFocus(parsed, output) {
-  const script = buildFocusRerouteScript(parsed);
-  if (!script) {
+function clearPendingFocusWarning(taskId) {
+  const timeout = pendingFocusWarningTimers.get(taskId);
+  if (!timeout) {
+    return;
+  }
+
+  clearTimeout(timeout);
+  pendingFocusWarningTimers.delete(taskId);
+}
+
+async function maybeWarnPendingFocusMiss(taskId) {
+  clearPendingFocusWarning(taskId);
+
+  const requests = await readPendingFocusRequests(focusRequestStorePath);
+  if (!requests.has(taskId)) {
+    return;
+  }
+
+  requests.delete(taskId);
+  await writePendingFocusRequests(focusRequestStorePath, requests);
+  getOutputChannel().appendLine(`focus miss ${taskId}: shared queue expired`);
+  vscode.window.showWarningMessage(`未找到任务 ${taskId.slice(0, 8)} 对应的终端。`);
+}
+
+function schedulePendingFocusWarning(taskId) {
+  clearPendingFocusWarning(taskId);
+  const timeout = setTimeout(() => {
+    void maybeWarnPendingFocusMiss(taskId);
+  }, PENDING_FOCUS_WARNING_DELAY_MS);
+  pendingFocusWarningTimers.set(taskId, timeout);
+}
+
+async function deferFocusToOwningWindow(parsed, output) {
+  if (!focusRequestStorePath) {
     return false;
   }
 
-  try {
-    await execFileAsync("osascript", ["-e", script]);
-    output.appendLine(
-      `focus reroute ${parsed.taskId} -> attempt ${(parsed.focusAttempt ?? 0) + 1}`
-    );
-    return true;
-  } catch (error) {
-    output.appendLine(`focus reroute failed ${parsed.taskId}: ${String(error)}`);
+  const requests = await readPendingFocusRequests(focusRequestStorePath);
+  if (!enqueuePendingFocusRequest(requests, parsed)) {
     return false;
+  }
+
+  await writePendingFocusRequests(focusRequestStorePath, requests);
+  output.appendLine(`focus deferred ${parsed.taskId}: queued for owning window`);
+  schedulePendingFocusWarning(parsed.taskId);
+  return true;
+}
+
+async function processPendingFocusRequests() {
+  if (processingPendingFocusRequests || !focusRequestStorePath) {
+    return;
+  }
+
+  processingPendingFocusRequests = true;
+  try {
+    const requests = await readPendingFocusRequests(focusRequestStorePath);
+    let changed = pruneExpiredPendingFocusRequests(requests);
+
+    for (const request of Array.from(requests.values())) {
+      const { terminal, source } = await resolveFocusedTerminal(
+        request.taskId,
+        request.cwd,
+        request.monitorPid
+      );
+      if (!terminal) {
+        continue;
+      }
+
+      await rememberTaskTerminal(request.taskId, terminal, request.cwd);
+      getOutputChannel().appendLine(`focus ${request.taskId} -> ${terminal.name} [shared-${source}]`);
+      terminal.show(false);
+      await vscode.commands.executeCommand("workbench.action.terminal.focus");
+      requests.delete(request.taskId);
+      changed = true;
+    }
+
+    if (changed) {
+      await writePendingFocusRequests(focusRequestStorePath, requests);
+    }
+  } catch (error) {
+    getOutputChannel().appendLine(`pending focus error: ${String(error)}`);
+  } finally {
+    processingPendingFocusRequests = false;
   }
 }
 
@@ -149,7 +223,7 @@ async function focusTerminal(parsed) {
     parsed.monitorPid
   );
   if (!terminal) {
-    if (shouldRerouteFocus(parsed) && (await rerouteFocus(parsed, output))) {
+    if (await deferFocusToOwningWindow(parsed, output)) {
       return;
     }
 
@@ -199,6 +273,7 @@ async function handleUri(uri) {
     output.appendLine(
       `register ${parsed.taskId} -> ${terminal.name} [${source}${processId ? ` pid=${processId}` : ""}]`
     );
+    void processPendingFocusRequests();
     return;
   }
 
@@ -208,6 +283,7 @@ async function handleUri(uri) {
 function activate(context) {
   extensionContext = context;
   taskStateRegistry = loadTaskStateRegistry(context);
+  focusRequestStorePath = getPendingFocusRequestStorePath(context.globalStorageUri?.fsPath ?? null);
   context.subscriptions.push(getOutputChannel());
   context.subscriptions.push(
     vscode.window.registerUriHandler({
@@ -220,11 +296,36 @@ function activate(context) {
       void forgetPersistedTerminal(terminal);
     })
   );
+  focusRequestPollTimer = setInterval(() => {
+    void processPendingFocusRequests();
+  }, PENDING_FOCUS_POLL_INTERVAL_MS);
+  context.subscriptions.push({
+    dispose() {
+      if (focusRequestPollTimer) {
+        clearInterval(focusRequestPollTimer);
+        focusRequestPollTimer = null;
+      }
+
+      for (const timeout of pendingFocusWarningTimers.values()) {
+        clearTimeout(timeout);
+      }
+      pendingFocusWarningTimers.clear();
+    }
+  });
 }
 
 function deactivate() {
   taskRegistry.clear();
   taskStateRegistry.clear();
+  if (focusRequestPollTimer) {
+    clearInterval(focusRequestPollTimer);
+    focusRequestPollTimer = null;
+  }
+  for (const timeout of pendingFocusWarningTimers.values()) {
+    clearTimeout(timeout);
+  }
+  pendingFocusWarningTimers.clear();
+  focusRequestStorePath = null;
   extensionContext = null;
 }
 
