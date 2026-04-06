@@ -2,11 +2,11 @@ class Monitor < Formula
   desc "Task observer wrapper for codex and claude on macOS"
   homepage "https://github.com/ycloud-sean/monitor-cli-task-observer"
   license "ISC"
-  version "1.0.14"
+  version "1.0.15"
 
-  url "https://cdn.jsdelivr.net/gh/ycloud-sean/monitor-cli-task-observer@homebrew-artifacts/monitor-runtime-v1.0.14-macos-arm64.tar.gz"
-  mirror "https://raw.githubusercontent.com/ycloud-sean/monitor-cli-task-observer/homebrew-artifacts/monitor-runtime-v1.0.14-macos-arm64.tar.gz"
-  sha256 "b92017b86f762eaae390417d78343de30989fefa31fa0088a4537355633c4618"
+  url "https://cdn.jsdelivr.net/gh/ycloud-sean/monitor-cli-task-observer@homebrew-artifacts/monitor-runtime-v1.0.15-macos-arm64.tar.gz"
+  mirror "https://raw.githubusercontent.com/ycloud-sean/monitor-cli-task-observer/homebrew-artifacts/monitor-runtime-v1.0.15-macos-arm64.tar.gz"
+  sha256 "340e69430b6f54959fece82e4eeb6630a23ae80f3b59e254224a5b40e84f83c4"
   head "https://github.com/ycloud-sean/monitor-cli-task-observer.git", branch: "main"
 
   depends_on arch: :arm64
@@ -55,8 +55,8 @@ class Monitor < Formula
 
       运行前请确保你的 PATH 中已有 `node`，并且版本为 Node.js 22.x。
 
-      如果你在 Cursor 中第一次执行 `monitor codex` 或 `monitor claude`，
-      monitor 会自动补装 Cursor bridge；若当时 Cursor 已在运行，请重启一次 Cursor。
+      如果你在 Cursor 中执行 `monitor codex` 或 `monitor claude`，
+      monitor 会自动补装或更新 Cursor bridge；若当时 Cursor 已在运行，请重启一次 Cursor。
 
       之后直接执行：
         monitor codex

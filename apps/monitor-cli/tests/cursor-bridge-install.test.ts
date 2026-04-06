@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   ensureCursorBridgeInstalled,
+  isCursorBridgeCurrent,
   isCursorBridgeInstalled,
   resolveCursorBridgeSourceDir,
   resolveCursorExtensionsDir,
@@ -18,10 +19,13 @@ function createTempDir(prefix: string): string {
   return dir;
 }
 
-function createCursorBridgeDir(baseDir: string): string {
+function createCursorBridgeDir(
+  baseDir: string,
+  extensionContent = "module.exports = {};\n"
+): string {
   mkdirSync(baseDir, { recursive: true });
   writeFileSync(join(baseDir, "package.json"), "{}\n");
-  writeFileSync(join(baseDir, "extension.js"), "module.exports = {};\n");
+  writeFileSync(join(baseDir, "extension.js"), extensionContent);
   return baseDir;
 }
 
@@ -67,18 +71,19 @@ describe("resolveCursorBridgeSourceDir", () => {
 describe("ensureCursorBridgeInstalled", () => {
   it("skips installation when the target already contains the extension", () => {
     const extensionsDir = createTempDir("monitor-cursor-ext-");
-    createCursorBridgeDir(
-      join(extensionsDir, "liangxin.monitor-cursor-bridge-0.1.0")
-    );
+    const sourceDir = createCursorBridgeDir(join(createTempDir("monitor-source-"), "bridge"));
+    createCursorBridgeDir(join(extensionsDir, "liangxin.monitor-cursor-bridge-0.1.0"));
 
     const result = ensureCursorBridgeInstalled({
       env: {
+        MONITOR_CURSOR_BRIDGE_SOURCE_DIR: sourceDir,
         MONITOR_CURSOR_EXTENSIONS_DIR: extensionsDir
       }
     });
 
     expect(result).toEqual({
       installed: false,
+      reason: "current",
       targetDir: resolveCursorBridgeTargetDir(
         {
           MONITOR_CURSOR_EXTENSIONS_DIR: extensionsDir
@@ -87,5 +92,42 @@ describe("ensureCursorBridgeInstalled", () => {
       )
     });
     expect(isCursorBridgeInstalled({ MONITOR_CURSOR_EXTENSIONS_DIR: extensionsDir })).toBe(true);
+    expect(
+      isCursorBridgeCurrent({
+        env: {
+          MONITOR_CURSOR_BRIDGE_SOURCE_DIR: sourceDir,
+          MONITOR_CURSOR_EXTENSIONS_DIR: extensionsDir
+        }
+      })
+    ).toBe(true);
+  });
+
+  it("reinstalls when the target extension exists but differs from the source", async () => {
+    const extensionsDir = createTempDir("monitor-cursor-ext-");
+    const sourceDir = createCursorBridgeDir(
+      join(createTempDir("monitor-source-"), "bridge"),
+      "module.exports = { fresh: true };\n"
+    );
+    const targetDir = createCursorBridgeDir(
+      join(extensionsDir, "liangxin.monitor-cursor-bridge-0.1.0"),
+      "module.exports = { stale: true };\n"
+    );
+
+    const result = ensureCursorBridgeInstalled({
+      env: {
+        MONITOR_CURSOR_BRIDGE_SOURCE_DIR: sourceDir,
+        MONITOR_CURSOR_EXTENSIONS_DIR: extensionsDir
+      }
+    });
+
+    expect(result).toEqual({
+      installed: true,
+      reason: "outdated",
+      targetDir
+    });
+    const { readFile } = await import("node:fs/promises");
+    expect(await readFile(join(targetDir, "extension.js"), "utf8")).toBe(
+      "module.exports = { fresh: true };\n"
+    );
   });
 });

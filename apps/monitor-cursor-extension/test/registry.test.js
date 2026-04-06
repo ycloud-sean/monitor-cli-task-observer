@@ -4,6 +4,7 @@ const {
   forgetTerminal,
   resolveTerminal,
   resolveTerminalByCwd,
+  resolveTerminalByProcessId,
   resolveTerminalByMonitorPid
 } = require("../lib/registry");
 
@@ -60,6 +61,21 @@ test("resolveTerminalByCwd returns null when multiple terminals share the same c
   ];
 
   assert.equal(resolveTerminalByCwd(terminals, "/tmp/project"), null);
+});
+
+test("resolveTerminalByProcessId matches a persisted terminal shell pid", async () => {
+  const terminal = {
+    name: "Terminal 5",
+    processId: Promise.resolve(456)
+  };
+  const otherTerminal = {
+    name: "Terminal 6",
+    processId: Promise.resolve(789)
+  };
+
+  const resolved = await resolveTerminalByProcessId([otherTerminal, terminal], 456);
+
+  assert.equal(resolved, terminal);
 });
 
 test("resolveTerminalByMonitorPid matches the terminal shell pid from the monitor ancestor chain", async () => {

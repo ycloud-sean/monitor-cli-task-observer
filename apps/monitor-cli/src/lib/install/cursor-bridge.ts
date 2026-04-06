@@ -1,4 +1,13 @@
-import { cpSync, existsSync, mkdirSync, rmSync } from "node:fs";
+import { createHash } from "node:crypto";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync
+} from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,6 +16,41 @@ export const CURSOR_BRIDGE_EXTENSION_DIRNAME = "liangxin.monitor-cursor-bridge-0
 
 function isCursorBridgeSourceDir(path: string): boolean {
   return existsSync(join(path, "package.json")) && existsSync(join(path, "extension.js"));
+}
+
+function collectDirectoryFiles(rootDir: string, currentDir = rootDir): string[] {
+  return readdirSync(currentDir, { withFileTypes: true })
+    .flatMap((entry) => {
+      const entryPath = join(currentDir, entry.name);
+      if (entry.isDirectory()) {
+        return collectDirectoryFiles(rootDir, entryPath);
+      }
+      if (!entry.isFile()) {
+        return [];
+      }
+      return [entryPath.slice(rootDir.length + 1)];
+    })
+    .sort();
+}
+
+function buildDirectorySignature(rootDir: string): string | null {
+  if (!isCursorBridgeSourceDir(rootDir)) {
+    return null;
+  }
+
+  const hash = createHash("sha256");
+  for (const relativePath of collectDirectoryFiles(rootDir)) {
+    const absolutePath = join(rootDir, relativePath);
+    const stat = statSync(absolutePath);
+    hash.update(relativePath);
+    hash.update("\0");
+    hash.update(String(stat.mode));
+    hash.update("\0");
+    hash.update(readFileSync(absolutePath));
+    hash.update("\0");
+  }
+
+  return hash.digest("hex");
 }
 
 export function resolveCursorExtensionsDir(env: NodeJS.ProcessEnv = process.env): string {
@@ -68,17 +112,36 @@ export function isCursorBridgeInstalled(
   return isCursorBridgeSourceDir(targetDir);
 }
 
+export function isCursorBridgeCurrent(options: {
+  moduleUrl?: string;
+  env?: NodeJS.ProcessEnv;
+  extensionsDir?: string;
+} = {}): boolean {
+  const env = options.env ?? process.env;
+  const extensionsDir = options.extensionsDir ?? resolveCursorExtensionsDir(env);
+  const targetDir = resolveCursorBridgeTargetDir(env, extensionsDir);
+  if (!isCursorBridgeSourceDir(targetDir)) {
+    return false;
+  }
+
+  const sourceDir = resolveCursorBridgeSourceDir(options.moduleUrl, env);
+  const sourceSignature = buildDirectorySignature(sourceDir);
+  const targetSignature = buildDirectorySignature(targetDir);
+  return Boolean(sourceSignature && targetSignature && sourceSignature === targetSignature);
+}
+
 export function ensureCursorBridgeInstalled(options: {
   moduleUrl?: string;
   env?: NodeJS.ProcessEnv;
   extensionsDir?: string;
-} = {}): { installed: boolean; targetDir: string } {
+} = {}): { installed: boolean; reason: "missing" | "outdated" | "current"; targetDir: string } {
   const env = options.env ?? process.env;
   const extensionsDir = options.extensionsDir ?? resolveCursorExtensionsDir(env);
   const targetDir = resolveCursorBridgeTargetDir(env, extensionsDir);
+  const wasInstalled = isCursorBridgeInstalled(env, extensionsDir);
 
-  if (isCursorBridgeInstalled(env, extensionsDir)) {
-    return { installed: false, targetDir };
+  if (wasInstalled && isCursorBridgeCurrent(options)) {
+    return { installed: false, reason: "current", targetDir };
   }
 
   installCursorBridge({
@@ -86,5 +149,9 @@ export function ensureCursorBridgeInstalled(options: {
     env,
     extensionsDir
   });
-  return { installed: true, targetDir };
+  return {
+    installed: true,
+    reason: wasInstalled ? "outdated" : "missing",
+    targetDir
+  };
 }
