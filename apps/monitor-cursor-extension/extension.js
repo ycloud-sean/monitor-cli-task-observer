@@ -1,3 +1,5 @@
+const { execFile } = require("node:child_process");
+const { promisify } = require("node:util");
 const vscode = require("vscode");
 const {
   forgetTerminal,
@@ -8,9 +10,14 @@ const {
   resolveTerminalByProcessId,
   resolveTerminalByMonitorPid
 } = require("./lib/registry");
+const {
+  buildFocusRerouteScript,
+  shouldRerouteFocus
+} = require("./lib/focus");
 const { parseMonitorUri } = require("./lib/uri");
 
 const TASK_STATE_KEY = "monitor.cursor.task-state.v1";
+const execFileAsync = promisify(execFile);
 const taskRegistry = new Map();
 let taskStateRegistry = new Map();
 let extensionContext = null;
@@ -116,20 +123,46 @@ async function resolveFocusedTerminal(taskId, cwd, processId) {
   return { terminal: null, source: "missing" };
 }
 
-async function focusTerminal(taskId, cwd, processId) {
+async function rerouteFocus(parsed, output) {
+  const script = buildFocusRerouteScript(parsed);
+  if (!script) {
+    return false;
+  }
+
+  try {
+    await execFileAsync("osascript", ["-e", script]);
+    output.appendLine(
+      `focus reroute ${parsed.taskId} -> attempt ${(parsed.focusAttempt ?? 0) + 1}`
+    );
+    return true;
+  } catch (error) {
+    output.appendLine(`focus reroute failed ${parsed.taskId}: ${String(error)}`);
+    return false;
+  }
+}
+
+async function focusTerminal(parsed) {
   const output = getOutputChannel();
-  const { terminal, source } = await resolveFocusedTerminal(taskId, cwd, processId);
+  const { terminal, source } = await resolveFocusedTerminal(
+    parsed.taskId,
+    parsed.cwd,
+    parsed.monitorPid
+  );
   if (!terminal) {
-    output.appendLine(`focus miss ${taskId}: registry/process/cwd all failed`);
+    if (shouldRerouteFocus(parsed) && (await rerouteFocus(parsed, output))) {
+      return;
+    }
+
+    output.appendLine(`focus miss ${parsed.taskId}: registry/process/cwd all failed`);
     await vscode.commands.executeCommand("workbench.action.terminal.focus");
     vscode.window.showWarningMessage(
-      `未找到任务 ${taskId.slice(0, 8)} 对应的终端，已切到终端面板。`
+      `未找到任务 ${parsed.taskId.slice(0, 8)} 对应的终端，已切到终端面板。`
     );
     return;
   }
 
-  await rememberTaskTerminal(taskId, terminal, cwd);
-  output.appendLine(`focus ${taskId} -> ${terminal.name} [${source}]`);
+  await rememberTaskTerminal(parsed.taskId, terminal, parsed.cwd);
+  output.appendLine(`focus ${parsed.taskId} -> ${terminal.name} [${source}]`);
   terminal.show(false);
   await vscode.commands.executeCommand("workbench.action.terminal.focus");
 }
@@ -169,7 +202,7 @@ async function handleUri(uri) {
     return;
   }
 
-  await focusTerminal(parsed.taskId, parsed.cwd, parsed.monitorPid);
+  await focusTerminal(parsed);
 }
 
 function activate(context) {

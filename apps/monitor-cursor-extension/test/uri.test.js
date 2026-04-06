@@ -5,7 +5,8 @@ const { parseMonitorUri } = require("../lib/uri");
 test("parseMonitorUri returns action and query parameters", () => {
   const parsed = parseMonitorUri({
     path: "/focus",
-    query: "taskId=task-1&name=test&cwd=%2Ftmp%2Fproject&monitorPid=1234"
+    query:
+      "taskId=task-1&name=test&cwd=%2Ftmp%2Fproject&monitorPid=1234&windowRef=cursor-window%3A123&focusAttempt=1"
   });
 
   assert.deepEqual(parsed, {
@@ -13,7 +14,9 @@ test("parseMonitorUri returns action and query parameters", () => {
     taskId: "task-1",
     name: "test",
     cwd: "/tmp/project",
-    monitorPid: "1234"
+    monitorPid: "1234",
+    windowRef: "cursor-window:123",
+    focusAttempt: 1
   });
 });
 

@@ -20,7 +20,8 @@ try
     buildCursorBridgeUri("focus", {
       taskId,
       cwd,
-      monitorPid: processId ? String(processId) : null
+      monitorPid: processId ? String(processId) : null,
+      windowRef
     })
   )}
 end try

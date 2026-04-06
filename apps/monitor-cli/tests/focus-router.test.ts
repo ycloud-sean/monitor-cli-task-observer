@@ -56,7 +56,7 @@ describe("buildFocusScript", () => {
       'if targetWorkspace is not "" and candidateTitle ends with ("— " & targetWorkspace) and candidatePosition is targetPosition and candidateSize is targetSize then'
     );
     expect(script).toContain(
-      'open location "cursor://liangxin.monitor-cursor-bridge/focus?taskId=3bbe7821-f8af-4654-b784-cfba51200232&cwd=%2Ftmp%2Fproject-a&monitorPid=4321"'
+      'open location "cursor://liangxin.monitor-cursor-bridge/focus?taskId=3bbe7821-f8af-4654-b784-cfba51200232&cwd=%2Ftmp%2Fproject-a&monitorPid=4321&windowRef=cursor-window%3A%7B%22title%22%3A%22Cursor+A+%E2%80%94+project-a%22%2C%22document%22%3A%22file%3A%2F%2F%2Ftmp%2Fproject-a%2FREADME.md%22%2C%22workspace%22%3A%22project-a%22%2C%22x%22%3A10%2C%22y%22%3A38%2C%22width%22%3A1440%2C%22height%22%3A900%7D"'
     );
   });
 });

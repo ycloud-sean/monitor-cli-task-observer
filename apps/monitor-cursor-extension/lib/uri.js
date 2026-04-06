@@ -10,12 +10,15 @@ function parseMonitorUri(uri) {
   }
 
   const params = new URLSearchParams(typeof uri?.query === "string" ? uri.query : "");
+  const focusAttempt = Number.parseInt(params.get("focusAttempt") ?? "", 10);
   return {
     action,
     taskId: params.get("taskId"),
     name: params.get("name"),
     cwd: params.get("cwd"),
-    monitorPid: params.get("monitorPid")
+    monitorPid: params.get("monitorPid"),
+    windowRef: params.get("windowRef"),
+    focusAttempt: Number.isInteger(focusAttempt) && focusAttempt >= 0 ? focusAttempt : 0
   };
 }
 
