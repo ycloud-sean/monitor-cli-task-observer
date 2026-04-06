@@ -61,7 +61,14 @@ export function resolveTtyRef(pid = process.pid): string | null {
 }
 
 function parseCursorWindowSnapshotLines(lines: string[]): CursorWindowSnapshot | null {
-  const [titleLine, documentLine, positionLine, sizeLine] = lines;
+  const [
+    titleLine,
+    documentLine,
+    positionLine,
+    sizeLine,
+    windowNumberLine,
+    identifierLine
+  ] = lines;
   if (!titleLine) return null;
 
   const parseNumberPair = (value: string | undefined): [number | null, number | null] => {
@@ -69,6 +76,15 @@ function parseCursorWindowSnapshotLines(lines: string[]): CursorWindowSnapshot |
     const match = /^\s*(-?\d+)\s*,\s*(-?\d+)\s*$/.exec(value);
     if (!match) return [null, null];
     return [Number(match[1]), Number(match[2])];
+  };
+  const parseOptionalInteger = (value: string | undefined): number | null => {
+    if (!value) return null;
+    const trimmed = value.trim();
+    if (!/^-?\d+$/.test(trimmed)) {
+      return null;
+    }
+
+    return Number(trimmed);
   };
 
   const [x, y] = parseNumberPair(positionLine);
@@ -83,7 +99,9 @@ function parseCursorWindowSnapshotLines(lines: string[]): CursorWindowSnapshot |
     x,
     y,
     width,
-    height
+    height,
+    windowNumber: parseOptionalInteger(windowNumberLine),
+    identifier: identifierLine || null
   };
 }
 
@@ -145,7 +163,23 @@ export function resolveCursorWindowRef(): string | null {
         "-e",
         'set sizeValue to (value of attribute "AXSize" of targetWindow)',
         "-e",
-        'return titleValue & linefeed & documentValue & linefeed & (item 1 of positionValue as text) & "," & (item 2 of positionValue as text) & linefeed & (item 1 of sizeValue as text) & "," & (item 2 of sizeValue as text)',
+        'set windowNumberValue to ""',
+        "-e",
+        'try',
+        "-e",
+        'set windowNumberValue to (value of attribute "AXWindowNumber" of targetWindow as text)',
+        "-e",
+        'end try',
+        "-e",
+        'set identifierValue to ""',
+        "-e",
+        'try',
+        "-e",
+        'set identifierValue to (value of attribute "AXIdentifier" of targetWindow as text)',
+        "-e",
+        'end try',
+        "-e",
+        'return titleValue & linefeed & documentValue & linefeed & (item 1 of positionValue as text) & "," & (item 2 of positionValue as text) & linefeed & (item 1 of sizeValue as text) & "," & (item 2 of sizeValue as text) & linefeed & windowNumberValue & linefeed & identifierValue',
         "-e",
         "end tell",
         "-e",

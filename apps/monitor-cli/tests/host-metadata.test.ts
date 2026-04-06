@@ -93,6 +93,22 @@ describe("detectHostMetadata", () => {
     );
   });
 
+  it("preserves stable Cursor window identifiers when normalizing workspace", () => {
+    const metadata = detectHostMetadata({
+      termProgram: "vscode",
+      termProgramVersion: "3.0.9",
+      ttyRef: "/dev/ttys004",
+      cursorWindowRef:
+        'cursor-window:{"title":"README.md — project-a","document":"file:///tmp/project-a/README.md","workspace":"README.md","x":10,"y":38,"width":1440,"height":900,"windowNumber":71,"identifier":"window-71"}',
+      cwd: "/tmp/project-a"
+    } as never);
+
+    expect(metadata.hostApp).toBe("cursor");
+    expect(metadata.hostWindowRef).toBe(
+      'cursor-window:{"title":"README.md — project-a","document":"file:///tmp/project-a/README.md","workspace":"project-a","x":10,"y":38,"width":1440,"height":900,"windowNumber":71,"identifier":"window-71"}'
+    );
+  });
+
   it("does not try to resolve a Cursor window when the host is not Cursor", () => {
     const cursorWindowRefResolver = vi.fn(() => "cursor-window:ignored");
 

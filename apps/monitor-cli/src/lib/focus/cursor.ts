@@ -34,9 +34,26 @@ end try
     set targetWorkspace to ${quoteAppleScriptString(snapshot.workspace ?? "")}
     set targetPosition to {${String(snapshot.x ?? -1)}, ${String(snapshot.y ?? -1)}}
     set targetSize to {${String(snapshot.width ?? -1)}, ${String(snapshot.height ?? -1)}}
+    set targetWindowNumber to ${String(snapshot.windowNumber ?? -1)}
+    set targetIdentifier to ${quoteAppleScriptString(snapshot.identifier ?? "")}
     set matchedWindow to missing value
+    set bestScore to -1
 
     repeat with aWindow in windows
+      set candidateScore to 0
+
+      try
+        set candidateWindowNumber to value of attribute "AXWindowNumber" of aWindow
+      on error
+        set candidateWindowNumber to -1
+      end try
+
+      try
+        set candidateIdentifier to value of attribute "AXIdentifier" of aWindow as text
+      on error
+        set candidateIdentifier to ""
+      end try
+
       try
         set candidateDocument to value of attribute "AXDocument" of aWindow as text
       on error
@@ -61,28 +78,47 @@ end try
         set candidateSize to {-1, -1}
       end try
 
+      if targetWindowNumber is not -1 and candidateWindowNumber is targetWindowNumber then
+        set candidateScore to candidateScore + 2000
+      end if
+
+      if targetIdentifier is not "" and candidateIdentifier is targetIdentifier then
+        set candidateScore to candidateScore + 1200
+      end if
+
       if targetDocument is not "" and candidateDocument is targetDocument then
-        set matchedWindow to aWindow
-        exit repeat
+        set candidateScore to candidateScore + 900
       end if
 
-      if targetTitle is not "" and candidateTitle is targetTitle and candidatePosition is targetPosition and candidateSize is targetSize then
-        set matchedWindow to aWindow
-        exit repeat
+      if targetWorkspace is not "" and candidateDocument contains ("/" & targetWorkspace & "/") then
+        set candidateScore to candidateScore + 260
       end if
 
-      if targetWorkspace is not "" and candidateTitle ends with ("— " & targetWorkspace) and candidatePosition is targetPosition and candidateSize is targetSize then
-        set matchedWindow to aWindow
-        exit repeat
+      if targetTitle is not "" and candidateTitle is targetTitle then
+        set candidateScore to candidateScore + 80
       end if
 
-      if candidatePosition is targetPosition and candidateSize is targetSize then
+      if targetWorkspace is not "" and candidateTitle ends with ("— " & targetWorkspace) then
+        set candidateScore to candidateScore + 120
+      else if targetWorkspace is not "" and candidateTitle contains targetWorkspace then
+        set candidateScore to candidateScore + 40
+      end if
+
+      if targetPosition is not {-1, -1} and candidatePosition is targetPosition then
+        set candidateScore to candidateScore + 40
+      end if
+
+      if targetSize is not {-1, -1} and candidateSize is targetSize then
+        set candidateScore to candidateScore + 40
+      end if
+
+      if candidateScore > bestScore then
+        set bestScore to candidateScore
         set matchedWindow to aWindow
-        exit repeat
       end if
     end repeat
 
-    if matchedWindow is not missing value then
+    if matchedWindow is not missing value and bestScore >= 200 then
       try
         perform action "AXRaise" of matchedWindow
       end try

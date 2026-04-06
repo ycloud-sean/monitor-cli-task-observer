@@ -6,6 +6,8 @@ export interface CursorWindowSnapshot {
   y: number | null;
   width: number | null;
   height: number | null;
+  windowNumber?: number | null;
+  identifier?: string | null;
 }
 
 export function parseCursorWindowRef(

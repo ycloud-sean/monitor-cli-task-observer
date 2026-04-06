@@ -37,7 +37,7 @@ describe("buildFocusScript", () => {
       taskId: "3bbe7821-f8af-4654-b784-cfba51200232",
       hostApp: "cursor",
       hostWindowRef:
-        'cursor-window:{"title":"Cursor A — project-a","document":"file:///tmp/project-a/README.md","workspace":"project-a","x":10,"y":38,"width":1440,"height":900}',
+        'cursor-window:{"title":"Cursor A — project-a","document":"file:///tmp/project-a/README.md","workspace":"project-a","x":10,"y":38,"width":1440,"height":900,"windowNumber":71,"identifier":"window-71"}',
       hostSessionRef: "pane-1",
       cwd: "/tmp/project-a",
       pid: 4321
@@ -46,17 +46,23 @@ describe("buildFocusScript", () => {
     expect(script).toContain('tell application "Cursor"');
     expect(script).toContain('set targetTitle to "Cursor A — project-a"');
     expect(script).toContain('set targetDocument to "file:///tmp/project-a/README.md"');
+    expect(script).toContain('set targetWorkspace to "project-a"');
     expect(script).toContain('set targetPosition to {10, 38}');
     expect(script).toContain('set targetSize to {1440, 900}');
+    expect(script).toContain("set targetWindowNumber to 71");
+    expect(script).toContain('set targetIdentifier to "window-71"');
     expect(script).toContain('perform action "AXRaise"');
     expect(script).toContain(
-      'if targetTitle is not "" and candidateTitle is targetTitle and candidatePosition is targetPosition and candidateSize is targetSize then'
+      'if targetWindowNumber is not -1 and candidateWindowNumber is targetWindowNumber then'
     );
     expect(script).toContain(
-      'if targetWorkspace is not "" and candidateTitle ends with ("— " & targetWorkspace) and candidatePosition is targetPosition and candidateSize is targetSize then'
+      'if targetWorkspace is not "" and candidateTitle ends with ("— " & targetWorkspace) then'
     );
+    expect(script).toContain('if matchedWindow is not missing value and bestScore >= 200 then');
     expect(script).toContain(
-      'open location "cursor://liangxin.monitor-cursor-bridge/focus?taskId=3bbe7821-f8af-4654-b784-cfba51200232&cwd=%2Ftmp%2Fproject-a&monitorPid=4321&windowRef=cursor-window%3A%7B%22title%22%3A%22Cursor+A+%E2%80%94+project-a%22%2C%22document%22%3A%22file%3A%2F%2F%2Ftmp%2Fproject-a%2FREADME.md%22%2C%22workspace%22%3A%22project-a%22%2C%22x%22%3A10%2C%22y%22%3A38%2C%22width%22%3A1440%2C%22height%22%3A900%7D"'
+      'open location "cursor://liangxin.monitor-cursor-bridge/focus?taskId=3bbe7821-f8af-4654-b784-cfba51200232'
     );
+    expect(script).toContain("windowNumber%22%3A71");
+    expect(script).toContain("identifier%22%3A%22window-71%22");
   });
 });
