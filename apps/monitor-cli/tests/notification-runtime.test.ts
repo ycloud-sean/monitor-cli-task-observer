@@ -23,6 +23,21 @@ function makeTask(
   };
 }
 
+function mockExecFileWithFrontmostGate(processName: string) {
+  return vi.fn((_command: string, args: string[], callback: Function) => {
+    const script = args.join("\n");
+    const hasFrontmostCheck = script.includes(
+      `frontmost of process "${processName}"`
+    );
+    queueMicrotask(() =>
+      callback(null, {
+        stdout: hasFrontmostCheck ? "false\n" : "true\n",
+        stderr: ""
+      })
+    );
+  });
+}
+
 afterEach(() => {
   vi.resetModules();
   vi.restoreAllMocks();
@@ -275,6 +290,121 @@ describe("notifyTask", () => {
     expect(args).toContain('tell application "Terminal"');
     expect(args).toContain(
       'return (tty of selected tab of front window as text) is "/dev/ttys013"'
+    );
+  });
+
+  it("still shows the dialog for Terminal tasks when Terminal is not the frontmost app", async () => {
+    const spawn = vi.fn(() => {
+      const child = new EventEmitter() as EventEmitter & { unref: () => void };
+      child.unref = vi.fn();
+      queueMicrotask(() => child.emit("spawn"));
+      return child;
+    });
+    const execFile = mockExecFileWithFrontmostGate("Terminal");
+
+    vi.doMock("node:child_process", () => ({ spawn, execFile }));
+
+    const { notifyTask } = await import("../src/lib/notification.js");
+    await notifyTask(
+      makeTask({
+        status: "waiting_input",
+        name: "needs-reply",
+        hostApp: "terminal",
+        hostWindowRef: "2E190177-7CD9-4678-8E24-13D260954522",
+        hostSessionRef: "/dev/ttys013"
+      })
+    );
+
+    expect(execFile).toHaveBeenCalledTimes(1);
+    expect(execFile.mock.calls[0]?.[1].join("\n")).toContain(
+      'frontmost of process "Terminal"'
+    );
+    expect(spawn).toHaveBeenCalledTimes(2);
+    expect(spawn).toHaveBeenNthCalledWith(
+      2,
+      "osascript",
+      expect.any(Array),
+      expect.objectContaining({
+        detached: true,
+        stdio: "ignore"
+      })
+    );
+  });
+
+  it("still shows the dialog for iTerm2 tasks when iTerm2 is not the frontmost app", async () => {
+    const spawn = vi.fn(() => {
+      const child = new EventEmitter() as EventEmitter & { unref: () => void };
+      child.unref = vi.fn();
+      queueMicrotask(() => child.emit("spawn"));
+      return child;
+    });
+    const execFile = mockExecFileWithFrontmostGate("iTerm2");
+
+    vi.doMock("node:child_process", () => ({ spawn, execFile }));
+
+    const { notifyTask } = await import("../src/lib/notification.js");
+    await notifyTask(
+      makeTask({
+        status: "waiting_input",
+        name: "needs-reply",
+        hostApp: "iterm2",
+        hostWindowRef: "window-2",
+        hostSessionRef: "/dev/ttys021"
+      })
+    );
+
+    expect(execFile).toHaveBeenCalledTimes(1);
+    expect(execFile.mock.calls[0]?.[1].join("\n")).toContain(
+      'frontmost of process "iTerm2"'
+    );
+    expect(spawn).toHaveBeenCalledTimes(2);
+    expect(spawn).toHaveBeenNthCalledWith(
+      2,
+      "osascript",
+      expect.any(Array),
+      expect.objectContaining({
+        detached: true,
+        stdio: "ignore"
+      })
+    );
+  });
+
+  it("still shows the dialog for Cursor tasks when Cursor is not the frontmost app", async () => {
+    const spawn = vi.fn(() => {
+      const child = new EventEmitter() as EventEmitter & { unref: () => void };
+      child.unref = vi.fn();
+      queueMicrotask(() => child.emit("spawn"));
+      return child;
+    });
+    const execFile = mockExecFileWithFrontmostGate("Cursor");
+
+    vi.doMock("node:child_process", () => ({ spawn, execFile }));
+
+    const { notifyTask } = await import("../src/lib/notification.js");
+    await notifyTask(
+      makeTask({
+        status: "waiting_input",
+        name: "needs-reply",
+        hostApp: "cursor",
+        hostWindowRef:
+          'cursor-window:{"title":"Cursor A — project-a","document":"file:///tmp/project-a/README.md","workspace":"project-a","x":10,"y":38,"width":1440,"height":900}',
+        hostSessionRef: null
+      })
+    );
+
+    expect(execFile).toHaveBeenCalledTimes(1);
+    expect(execFile.mock.calls[0]?.[1].join("\n")).toContain(
+      'frontmost of process "Cursor"'
+    );
+    expect(spawn).toHaveBeenCalledTimes(2);
+    expect(spawn).toHaveBeenNthCalledWith(
+      2,
+      "osascript",
+      expect.any(Array),
+      expect.objectContaining({
+        detached: true,
+        stdio: "ignore"
+      })
     );
   });
 });

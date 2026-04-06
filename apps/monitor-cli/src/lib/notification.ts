@@ -73,11 +73,25 @@ function isWaitingTask(task: TaskRecord): boolean {
   return task.status === "waiting_input" || task.status === "waiting_approval";
 }
 
+function buildFrontmostProcessCheck(processName: string): string[] {
+  return [
+    "-e",
+    'tell application "System Events"',
+    "-e",
+    `if not (exists process ${quoteAppleScriptString(processName)}) then return "false"`,
+    "-e",
+    `if not (frontmost of process ${quoteAppleScriptString(processName)}) then return "false"`,
+    "-e",
+    "end tell"
+  ];
+}
+
 async function isTaskVisibleInFront(task: TaskRecord): Promise<boolean> {
   if (task.hostApp === "terminal") {
     if (task.hostSessionRef) {
       try {
         const { stdout } = await execFileAsync("osascript", [
+          ...buildFrontmostProcessCheck("Terminal"),
           "-e",
           'tell application "Terminal"',
           "-e",
@@ -106,6 +120,7 @@ async function isTaskVisibleInFront(task: TaskRecord): Promise<boolean> {
     if (task.hostWindowRef && /^\d+$/.test(task.hostWindowRef)) {
       try {
         const { stdout } = await execFileAsync("osascript", [
+          ...buildFrontmostProcessCheck("Terminal"),
           "-e",
           'tell application "Terminal"',
           "-e",
@@ -133,6 +148,7 @@ async function isTaskVisibleInFront(task: TaskRecord): Promise<boolean> {
 
     try {
       const { stdout } = await execFileAsync("osascript", [
+        ...buildFrontmostProcessCheck("iTerm2"),
         "-e",
         'tell application "iTerm2"',
         "-e",
@@ -162,6 +178,7 @@ async function isTaskVisibleInFront(task: TaskRecord): Promise<boolean> {
 
     try {
       const { stdout } = await execFileAsync("osascript", [
+        ...buildFrontmostProcessCheck("Cursor"),
         "-e",
         'tell application "System Events"',
         "-e",
