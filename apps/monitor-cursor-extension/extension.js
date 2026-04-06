@@ -15,6 +15,7 @@ const {
   readPendingFocusRequests,
   writePendingFocusRequests
 } = require("./lib/focus-queue");
+const { revealTerminal } = require("./lib/terminal-focus");
 const { raiseCursorWindow } = require("./lib/window-focus");
 const { parseMonitorUri } = require("./lib/uri");
 
@@ -206,8 +207,15 @@ async function processPendingFocusRequests() {
           `raise ${request.taskId} [shared] -> ${raisedWindow ? "ok" : "miss"}`
         );
       }
-      terminal.show(false);
-      await vscode.commands.executeCommand("workbench.action.terminal.focus");
+      const { focusIndexCommand } = await revealTerminal(
+        terminal,
+        vscode.window.terminals,
+        (command) => vscode.commands.executeCommand(command),
+        () => vscode.window.activeTerminal
+      );
+      if (focusIndexCommand) {
+        getOutputChannel().appendLine(`terminal select ${request.taskId} [shared] -> ${focusIndexCommand}`);
+      }
       requests.delete(request.taskId);
       changed = true;
     }
@@ -248,8 +256,15 @@ async function focusTerminal(parsed) {
   if (parsed.windowRef) {
     output.appendLine(`raise ${parsed.taskId} -> ${raisedWindow ? "ok" : "miss"}`);
   }
-  terminal.show(false);
-  await vscode.commands.executeCommand("workbench.action.terminal.focus");
+  const { focusIndexCommand } = await revealTerminal(
+    terminal,
+    vscode.window.terminals,
+    (command) => vscode.commands.executeCommand(command),
+    () => vscode.window.activeTerminal
+  );
+  if (focusIndexCommand) {
+    output.appendLine(`terminal select ${parsed.taskId} -> ${focusIndexCommand}`);
+  }
 }
 
 async function handleUri(uri) {
