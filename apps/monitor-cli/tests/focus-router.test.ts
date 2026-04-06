@@ -51,6 +51,8 @@ describe("buildFocusScript", () => {
     expect(script).toContain('set targetSize to {1440, 900}');
     expect(script).toContain("set targetWindowNumber to 71");
     expect(script).toContain('set targetIdentifier to "window-71"');
+    expect(script).toContain('set candidateName to ""');
+    expect(script).toContain('if targetWorkspace is not "" and candidateName is targetWorkspace then');
     expect(script).toContain('perform action "AXRaise"');
     expect(script).toContain(
       'if targetWindowNumber is not -1 and candidateWindowNumber is targetWindowNumber then'

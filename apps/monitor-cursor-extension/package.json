@@ -16,7 +16,7 @@
   ],
   "main": "./extension.js",
   "scripts": {
-    "build": "node --check extension.js && node --check lib/focus-queue.js && node --check lib/registry.js && node --check lib/terminal-focus.js && node --check lib/uri.js && node --check lib/window-focus.js",
+    "build": "node --check extension.js && node --check lib/focus-queue.js && node --check lib/registry.js && node --check lib/terminal-focus.js && node --check lib/uri.js && node --check lib/window-focus.js && node --check lib/workspace-routing.js",
     "test": "node --test test/*.test.js",
     "lint": "npm run build"
   }

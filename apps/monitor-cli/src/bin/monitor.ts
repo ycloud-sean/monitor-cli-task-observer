@@ -2,8 +2,8 @@
 
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
-import { constants as osConstants, tmpdir } from "node:os";
+import { appendFileSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { constants as osConstants, homedir, tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import type { TaskEvent, TaskRecord } from "@monitor/contracts";
@@ -21,6 +21,27 @@ import { buildCursorBridgeUri } from "../lib/focus/cursor-bridge.js";
 import { wrapCommandWithPty } from "../lib/pty.js";
 
 const DEFAULT_DAEMON_URL = "http://127.0.0.1:45731";
+const CURSOR_DEBUG_LOG_FILE = "cursor-focus-debug.jsonl";
+
+function appendCursorDebugLog(event: string, payload: Record<string, unknown>): void {
+  try {
+    const dataDir = process.env.MONITOR_DATA_DIR ?? join(homedir(), ".monitor-data");
+    mkdirSync(dataDir, { recursive: true });
+    appendFileSync(
+      join(dataDir, CURSOR_DEBUG_LOG_FILE),
+      `${JSON.stringify({
+        ts: new Date().toISOString(),
+        scope: "monitor-cli",
+        pid: process.pid,
+        event,
+        ...payload
+      })}\n`,
+      "utf8"
+    );
+  } catch {
+    // Debug logging is best-effort only.
+  }
+}
 
 export function parseNameArg(args: string[]): { name: string; remainingArgs: string[] } {
   const nameIndex = args.indexOf("--name");
@@ -241,6 +262,20 @@ export async function main(): Promise<void> {
     didSpawn = true;
     const startedAt = new Date().toISOString();
     if (host.hostApp === "cursor") {
+      appendCursorDebugLog("cursor-task-spawned", {
+        taskId,
+        name: displayName,
+        cwd: process.cwd(),
+        hostWindowRef: host.hostWindowRef,
+        hostSessionRef: host.hostSessionRef,
+        env: {
+          TERM_PROGRAM: process.env.TERM_PROGRAM ?? null,
+          TERM_PROGRAM_VERSION: process.env.TERM_PROGRAM_VERSION ?? null,
+          CURSOR_TRACE_ID: process.env.CURSOR_TRACE_ID ?? null,
+          CURSOR_AGENT: process.env.CURSOR_AGENT ?? null,
+          WINDOWID: process.env.WINDOWID ?? null
+        }
+      });
       openUriDetached(
         buildCursorBridgeUri("register", {
           taskId,

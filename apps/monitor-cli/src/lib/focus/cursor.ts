@@ -41,6 +41,13 @@ end try
 
     repeat with aWindow in windows
       set candidateScore to 0
+      set candidateName to ""
+
+      try
+        set candidateName to name of aWindow as text
+      on error
+        set candidateName to ""
+      end try
 
       try
         set candidateWindowNumber to value of attribute "AXWindowNumber" of aWindow
@@ -80,6 +87,14 @@ end try
 
       if targetWindowNumber is not -1 and candidateWindowNumber is targetWindowNumber then
         set candidateScore to candidateScore + 2000
+      end if
+
+      if targetWorkspace is not "" and candidateName is targetWorkspace then
+        set candidateScore to candidateScore + 3200
+      end if
+
+      if targetTitle is not "" and candidateName is targetTitle then
+        set candidateScore to candidateScore + 1500
       end if
 
       if targetIdentifier is not "" and candidateIdentifier is targetIdentifier then
