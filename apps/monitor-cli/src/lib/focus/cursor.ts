@@ -65,12 +65,12 @@ end try
         exit repeat
       end if
 
-      if targetTitle is not "" and candidateTitle is targetTitle then
+      if targetTitle is not "" and candidateTitle is targetTitle and candidatePosition is targetPosition and candidateSize is targetSize then
         set matchedWindow to aWindow
         exit repeat
       end if
 
-      if targetWorkspace is not "" and candidateTitle ends with ("— " & targetWorkspace) then
+      if targetWorkspace is not "" and candidateTitle ends with ("— " & targetWorkspace) and candidatePosition is targetPosition and candidateSize is targetSize then
         set matchedWindow to aWindow
         exit repeat
       end if
