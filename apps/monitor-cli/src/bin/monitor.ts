@@ -164,8 +164,9 @@ export async function main(): Promise<void> {
         moduleUrl: import.meta.url
       });
       if (result.installed) {
+        const actionText = result.reason === "outdated" ? "更新" : "安装";
         process.stderr.write(
-          `monitor: 已自动安装 Cursor bridge 到 ${result.targetDir}，请重启一次 Cursor。\n`
+          `monitor: 已自动${actionText} Cursor bridge 到 ${result.targetDir}，请重启一次 Cursor。\n`
         );
       }
     } catch (error) {
