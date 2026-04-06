@@ -10,6 +10,7 @@
     "build:installable": "npm run -w @monitor/contracts build && npm run -w @monitor/cli build && npm run -w monitor-cursor-bridge build",
     "build:runtime-bundle": "bash ./scripts/build-runtime-bundle.sh",
     "install:local": "bash ./scripts/install.sh",
+    "release:monitor": "bash ./scripts/release-monitor.sh",
     "test": "npm run -ws test",
     "build": "npm run -ws build",
     "lint": "npm run -ws lint"

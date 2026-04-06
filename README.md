@@ -208,6 +208,34 @@ node apps/monitor-cli/dist/bin/monitord.js
   - 正确的终端 session 被直接显示并获得焦点
   - 如果任务对应窗口本来就已经在前台，monitor 只会播放提示音，不再重复弹等待弹窗
 
+### 8. 维护者发布
+
+如果你要正式发布新版本，不要再手动分别改三个仓库。先把根 `package.json` 的版本号改好并提交代码，然后直接执行：
+
+```bash
+npm run release:monitor
+```
+
+这个脚本会按顺序完成：
+
+- 跑 `monitor-cursor-bridge` 和 `@monitor/cli` 测试
+- 构建 installable 产物和 runtime bundle
+- 把当前源码仓库的 `Formula/monitor.rb`、tag 和 `main` 一起推上去
+- 把 runtime bundle 推到 `homebrew-artifacts` 分支
+- 把真正的 tap 仓库 `ycloud-sean/homebrew-monitor` 里的 `Formula/monitor.rb` 更新到同一版本
+
+常用选项：
+
+- `npm run release:monitor -- --dry-run`：演练整个流程，但不 commit、不打 tag、不 push
+- `npm run release:monitor -- --skip-tests`：前面测试已经确认通过，只补发发布链时使用
+- `npm run release:monitor -- --keep-temp-dirs`：保留临时 worktree 和 tap 副本，方便排查发布失败
+
+补充说明：
+
+- 脚本默认把当前 `HEAD` 推到“当前分支 + main”，这样可以兼容当前仓库的工作分支习惯
+- 它解决的是“发布时别漏发仓库”的问题，不是替 Homebrew 客户端强制刷新本地 tap
+- 所以如果某个用户在你刚发版后的很短时间内立刻执行 `brew upgrade ycloud-sean/monitor/monitor`，是否马上看到新版本，仍取决于他本机 Homebrew 何时刷新第三方 tap
+
 ## 如何安装使用
 
 ### 1. 授权
