@@ -38,6 +38,44 @@ function mockExecFileWithFrontmostGate(processName: string) {
   });
 }
 
+function mockExecFileWithCursorFrontWindow(options: {
+  title?: string;
+  document?: string;
+  position?: [number, number];
+  size?: [number, number];
+}) {
+  return vi.fn((_command: string, args: string[], callback: Function) => {
+    const script = args.join("\n");
+    const targetTitle = /set targetTitle to "([^"]*)"/.exec(script)?.[1] ?? "";
+    const targetDocument = /set targetDocument to "([^"]*)"/.exec(script)?.[1] ?? "";
+    const targetPositionMatch = /set targetPosition to \{(-?\d+), (-?\d+)\}/.exec(script);
+    const targetSizeMatch = /set targetSize to \{(-?\d+), (-?\d+)\}/.exec(script);
+    const targetPosition = targetPositionMatch
+      ? [Number(targetPositionMatch[1]), Number(targetPositionMatch[2])]
+      : [-1, -1];
+    const targetSize = targetSizeMatch
+      ? [Number(targetSizeMatch[1]), Number(targetSizeMatch[2])]
+      : [-1, -1];
+    const matchesDocument =
+      targetDocument !== "" && (options.document ?? "") === targetDocument;
+    const matchesTitle = targetTitle !== "" && (options.title ?? "") === targetTitle;
+    const matchesGeometry =
+      !!options.position &&
+      !!options.size &&
+      targetPosition[0] === options.position[0] &&
+      targetPosition[1] === options.position[1] &&
+      targetSize[0] === options.size[0] &&
+      targetSize[1] === options.size[1];
+
+    queueMicrotask(() =>
+      callback(null, {
+        stdout: matchesDocument || (matchesTitle && matchesGeometry) ? "true\n" : "false\n",
+        stderr: ""
+      })
+    );
+  });
+}
+
 afterEach(() => {
   vi.resetModules();
   vi.restoreAllMocks();
@@ -401,6 +439,88 @@ describe("notifyTask", () => {
       2,
       "osascript",
       expect.any(Array),
+      expect.objectContaining({
+        detached: true,
+        stdio: "ignore"
+      })
+    );
+  });
+
+  it("still shows the dialog for Cursor tasks when another front window only shares the same title", async () => {
+    const spawn = vi.fn(() => {
+      const child = new EventEmitter() as EventEmitter & { unref: () => void };
+      child.unref = vi.fn();
+      queueMicrotask(() => child.emit("spawn"));
+      return child;
+    });
+    const execFile = mockExecFileWithCursorFrontWindow({
+      title: "test",
+      document: null,
+      position: [300, 30],
+      size: [2560, 1308]
+    });
+
+    vi.doMock("node:child_process", () => ({ spawn, execFile }));
+
+    const { notifyTask } = await import("../src/lib/notification.js");
+    await notifyTask(
+      makeTask({
+        status: "waiting_input",
+        name: "needs-reply",
+        hostApp: "cursor",
+        hostWindowRef:
+          'cursor-window:{"title":"test","document":null,"workspace":"test","x":0,"y":30,"width":2560,"height":1308}',
+        hostSessionRef: null
+      })
+    );
+
+    expect(execFile).toHaveBeenCalledTimes(1);
+    expect(spawn).toHaveBeenCalledTimes(2);
+    expect(spawn).toHaveBeenNthCalledWith(
+      2,
+      "osascript",
+      expect.any(Array),
+      expect.objectContaining({
+        detached: true,
+        stdio: "ignore"
+      })
+    );
+  });
+
+  it("still suppresses the dialog for Cursor tasks when title and geometry both match", async () => {
+    const spawn = vi.fn(() => {
+      const child = new EventEmitter() as EventEmitter & { unref: () => void };
+      child.unref = vi.fn();
+      queueMicrotask(() => child.emit("spawn"));
+      return child;
+    });
+    const execFile = mockExecFileWithCursorFrontWindow({
+      title: "test",
+      document: null,
+      position: [0, 30],
+      size: [2560, 1308]
+    });
+
+    vi.doMock("node:child_process", () => ({ spawn, execFile }));
+
+    const { notifyTask } = await import("../src/lib/notification.js");
+    await notifyTask(
+      makeTask({
+        status: "waiting_input",
+        name: "needs-reply",
+        hostApp: "cursor",
+        hostWindowRef:
+          'cursor-window:{"title":"test","document":null,"workspace":"test","x":0,"y":30,"width":2560,"height":1308}',
+        hostSessionRef: null
+      })
+    );
+
+    expect(execFile).toHaveBeenCalledTimes(1);
+    expect(spawn).toHaveBeenCalledTimes(1);
+    expect(spawn).toHaveBeenNthCalledWith(
+      1,
+      "/usr/bin/afplay",
+      ["/System/Library/Sounds/Glass.aiff"],
       expect.objectContaining({
         detached: true,
         stdio: "ignore"

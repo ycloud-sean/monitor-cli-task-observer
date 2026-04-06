@@ -32,6 +32,7 @@ describe("detectHostMetadata", () => {
 
   it("keeps cursor-specific refs for cursor tasks", () => {
     const metadata = detectHostMetadata({
+      termProgram: "vscode",
       termProgramVersion: "Cursor 0.52",
       cursorTraceId: "cursor-window-1",
       cursorAgent: "pane-1",
