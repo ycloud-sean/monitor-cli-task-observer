@@ -44,6 +44,11 @@ function getTerminalCwd(terminal) {
   return null;
 }
 
+async function getTerminalProcessId(terminal) {
+  const processId = await Promise.resolve(terminal?.processId).catch(() => undefined);
+  return Number.isInteger(processId) && processId > 0 ? processId : null;
+}
+
 function resolveTerminalByCwd(terminals, cwd) {
   const normalizedCwd = normalizeCwd(cwd);
   if (!normalizedCwd) {
@@ -52,6 +57,26 @@ function resolveTerminalByCwd(terminals, cwd) {
 
   const matches = terminals.filter((terminal) => getTerminalCwd(terminal) === normalizedCwd);
   return matches.length === 1 ? matches[0] : null;
+}
+
+async function resolveTerminalByProcessId(terminals, processId) {
+  const normalizedPid = Number(processId);
+  if (!Number.isInteger(normalizedPid) || normalizedPid <= 0) {
+    return null;
+  }
+
+  const terminalsWithPids = await Promise.all(
+    terminals.map(async (terminal) => ({
+      terminal,
+      processId: await getTerminalProcessId(terminal)
+    }))
+  );
+
+  const matches = terminalsWithPids.filter(
+    ({ processId: terminalProcessId }) => terminalProcessId === normalizedPid
+  );
+
+  return matches.length === 1 ? matches[0].terminal : null;
 }
 
 async function resolveTerminalByMonitorPid(terminals, monitorPid, execFileImpl = execFileAsync) {
@@ -87,7 +112,7 @@ async function resolveTerminalByMonitorPid(terminals, monitorPid, execFileImpl =
   const terminalsWithPids = await Promise.all(
     terminals.map(async (terminal) => ({
       terminal,
-      processId: await Promise.resolve(terminal.processId).catch(() => undefined)
+      processId: await getTerminalProcessId(terminal)
     }))
   );
 
@@ -113,7 +138,10 @@ function resolveTerminal(taskRegistry, taskId, terminals, cwd = null) {
 
 module.exports = {
   forgetTerminal,
+  getTerminalCwd,
+  getTerminalProcessId,
   resolveTerminal,
   resolveTerminalByCwd,
+  resolveTerminalByProcessId,
   resolveTerminalByMonitorPid
 };

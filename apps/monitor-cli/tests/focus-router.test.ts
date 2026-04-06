@@ -8,7 +8,8 @@ describe("buildFocusScript", () => {
       hostApp: "terminal",
       hostWindowRef: "42",
       hostSessionRef: "/dev/ttys001",
-      cwd: "/tmp/project-terminal"
+      cwd: "/tmp/project-terminal",
+      pid: 101
     });
 
     expect(script).toContain('tell application "Terminal"');
@@ -22,7 +23,8 @@ describe("buildFocusScript", () => {
       hostApp: "iterm2",
       hostWindowRef: null,
       hostSessionRef: "/dev/ttys002",
-      cwd: "/tmp/project-iterm"
+      cwd: "/tmp/project-iterm",
+      pid: 202
     });
 
     expect(script).toContain('tell application "iTerm2"');
@@ -37,7 +39,8 @@ describe("buildFocusScript", () => {
       hostWindowRef:
         'cursor-window:{"title":"Cursor A — project-a","document":"file:///tmp/project-a/README.md","workspace":"project-a","x":10,"y":38,"width":1440,"height":900}',
       hostSessionRef: "pane-1",
-      cwd: "/tmp/project-a"
+      cwd: "/tmp/project-a",
+      pid: 4321
     });
 
     expect(script).toContain('tell application "Cursor"');
@@ -47,7 +50,7 @@ describe("buildFocusScript", () => {
     expect(script).toContain('set targetSize to {1440, 900}');
     expect(script).toContain('perform action "AXRaise"');
     expect(script).toContain(
-      'open location "cursor://liangxin.monitor-cursor-bridge/focus?taskId=3bbe7821-f8af-4654-b784-cfba51200232&cwd=%2Ftmp%2Fproject-a"'
+      'open location "cursor://liangxin.monitor-cursor-bridge/focus?taskId=3bbe7821-f8af-4654-b784-cfba51200232&cwd=%2Ftmp%2Fproject-a&monitorPid=4321"'
     );
   });
 });

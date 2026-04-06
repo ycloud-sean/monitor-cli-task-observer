@@ -4,7 +4,7 @@ import { iTermScript, terminalScript } from "./apple-script.js";
 
 type FocusTarget = Pick<
   TaskRecord,
-  "taskId" | "hostApp" | "hostWindowRef" | "hostSessionRef" | "cwd"
+  "taskId" | "hostApp" | "hostWindowRef" | "hostSessionRef" | "cwd" | "pid"
 >;
 
 export function buildFocusScript(task: FocusTarget): string {
@@ -17,7 +17,7 @@ export function buildFocusScript(task: FocusTarget): string {
   }
 
   if (task.hostApp === "cursor") {
-    return cursorScript(task.hostWindowRef, task.cwd, task.taskId);
+    return cursorScript(task.hostWindowRef, task.cwd, task.taskId, task.pid);
   }
 
   throw new Error(`unsupported host app: ${task.hostApp}`);

@@ -8,7 +8,8 @@ function quoteAppleScriptString(value: string): string {
 export function cursorScript(
   windowRef: string | null = null,
   cwd: string | null = null,
-  taskId: string | null = null
+  taskId: string | null = null,
+  processId: number | null = null
 ): string {
   const snapshot = parseCursorWindowRef(windowRef);
   const focusTerminalScript = taskId
@@ -18,7 +19,8 @@ try
   open location ${quoteAppleScriptString(
     buildCursorBridgeUri("focus", {
       taskId,
-      cwd
+      cwd,
+      monitorPid: processId ? String(processId) : null
     })
   )}
 end try
